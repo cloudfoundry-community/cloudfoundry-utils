@@ -1,0 +1,75 @@
+#!/bin/bash
+
+debug() {
+	if [[ -n ${DEBUG} && ${DEBUG} != '0' ]];
+		then echo >&2 '>> ' "$*"
+	fi
+}
+
+BROKER=$1
+
+set -e
+
+if [[ -z ${BROKER} ]]; then
+	echo "You need to provide a service broker name to find service instances for"
+	exit 1
+fi
+
+workspace=$(mktemp -d)
+trap 'rm -rf ${workspace:?nothing to remove}' INT TERM QUIT EXIT
+debug "set up workspace directory ${workspace}"
+
+debug "caching data from cloud foundry"
+for _what in services service_{bindings,brokers,plans,instances} apps spaces; do
+	cf curl /v2/${_what} > ${workspace}/${_what}
+done
+
+BROKER_GUID=$(cat ${workspace}/service_brokers | jq -r '.resources | map(if .entity.name == "'${BROKER}'" then .metadata.guid else 0 end) | map(select(. != 0)) | .[0]')
+debug "broker '${BROKER}' has guid {${BROKER_GUID}}"
+
+(
+	echo -e "Service\t#\tBound Application(s)\tOrganization\tSpace"
+	echo -e "-------\t-\t--------------------\t------------\t-----"
+	for service_guid in $(cat ${workspace}/services | jq -r '.resources | map(if .entity.service_broker_guid == "'${BROKER_GUID}'" then .metadata.guid else 0 end) | map(select(. != 0)) | .[]'); do
+		debug "found service guid {${service_guid}} bound to broker"
+
+		for service_plan_guid in $(cat ${workspace}/service_plans | jq -r '.resources |map(if .entity.service_guid == "'${service_guid}'" then .metadata.guid else 0 end) | map(select(. != 0 )) | .[]'); do
+			debug "  found service plan guid {${service_plan_guid}} for service"
+			for service_instance_guid in $(cat ${workspace}/service_instances | jq -r '.resources | map(if .entity.service_plan_guid == "'${service_plan_guid}'" then .metadata.guid else 0 end) | map(select(. != 0 )) | .[]'); do
+				service_name=$(cf curl /v2/service_instances/${service_instance_guid} | jq -r '.entity.name')
+				debug "    found service instance '${service_name}' with guid {${service_instance_guid}}"
+				n=0
+
+				count=$(cat ${workspace}/service_bindings | jq -r '.resources | map(if .entity.service_instance_guid == "'${service_instance_guid}'" then .entity.app_guid else 0 end) | map(select(. != 0)) | .[]' | wc -l)
+				for app_guid in $(cat ${workspace}/service_bindings | jq -r '.resources | map(if .entity.service_instance_guid == "'${service_instance_guid}'" then .entity.app_guid else 0 end) | map(select(. != 0)) | .[]')
+				do
+					app_name=$(cat ${workspace}/apps | jq -r '.resources | map(if .metadata.guid == "'${app_guid}'" then .entity.name else 0 end) | map(select(. != 0)) | .[0]')
+					debug "      found app '${app_name}' with guid {${app_guid}}"
+
+					space_guid=$(cat ${workspace}/apps | jq -r '.resources | map(if .metadata.guid == "'${app_guid}'" then .entity.space_guid else 0 end) | map(select(. != 0)) | .[0]')
+					[[ ! -f "${workspace}/space-${space_guid}" ]] && cf curl /v2/spaces/${space_guid} > ${workspace}/space-${space_guid}
+					space_name=$(cat ${workspace}/space-${space_guid} | jq -r '.entity.name')
+
+					org_guid=$(cat ${workspace}/space-${space_guid} | jq -r '.entity.organization_guid')
+					[[ ! -f "${workspace}/org-${org_guid}" ]] && cf curl /v2/organizations/${org_guid} > ${workspace}/org-${org_guid}
+					org_name=$(cat ${workspace}/org-${org_guid} | jq -r '.entity.name')
+
+					debug "      -- in ${org_name} / ${space_name}"
+
+					app_name=${app_name:-(${app_guid})}
+					if [[ $n == 0 ]]; then
+						echo -ne "${service_name}\t${count}\t"
+					else
+						echo -ne " \t \t"
+					fi
+					echo -e "${app_name}\t${org_name}\t${space_name}"
+					n=$(( n + 1 ))
+				done
+
+				if [[ $n == 0 ]]; then
+					echo -e "${service_name}\t${n}\t<none>"
+				fi
+			done
+		done
+	done
+) | column -t -s "	"
