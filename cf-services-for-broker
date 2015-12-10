@@ -28,19 +28,20 @@ function process_serviceinstance() {
 	apps=""
 	count=$(cat $(cf_curl ${next_bindings_url}) | jq -r '.total_results')
 
+	debug "    found service ${service_name} with guid {${service_instance_guid}}"
+	space_guid=$(cat $(cf_curl /v2/service_instances/${service_instance_guid}) | jq -r '.entity.space_guid')
+	space_name=$(cat $(cf_curl /v2/spaces/${space_guid}) | jq -r '.entity.name')
+	debug "    -- in ${org_name} / ${space_name}"
+	org_guid=$(cat $(cf_curl /v2/spaces/${space_guid}) | jq -r '.entity.organization_guid')
+	org_name=$(cat $(cf_curl /v2/organizations/${org_guid}) | jq -r '.entity.name')
+
 	if [[ ${count} > 0 ]]; then
 		next_bindings_url="/v2/service_bindings?q=service_instance_guid:${service_instance_guid}"
 		while [[ ${next_bindings_url} != "null" ]]; do
 			for app_guid in $(cat $(cf_curl ${next_bindings_url}) | jq -r '.resources[].entity.app_guid'); do
 				app_name=$(cat $(cf_curl /v2/apps/${app_guid}) | jq -r '.entity.name')
 				debug "      found app '${app_name}' with guid {${app_guid}}"
-				space_guid=$(cat $(cf_curl /v2/apps/${app_guid}) | jq -r '.entity.space_guid')
-				space_name=$(cat $(cf_curl /v2/spaces/${space_guid}) | jq -r '.entity.name')
-				org_guid=$(cat $(cf_curl /v2/spaces/${space_guid}) | jq -r '.entity.organization_guid')
 
-				org_name=$(cat $(cf_curl /v2/organizations/${org_guid}) | jq -r '.entity.name')
-
-				debug "      -- in ${org_name} / ${space_name}"
 
 				app_name=${app_name:-(${app_guid})}
 				if [[ $n == 0 ]]; then
@@ -55,7 +56,7 @@ function process_serviceinstance() {
 			next_bindings_url=$(cat $(cf_curl ${next_bindings_url}) | jq -r -c ".next_url")
 		done
 	else
-		echo -e "${service_name}\t${n}\t"
+		echo -e "${service_name}\t${n}\t \t${org_name}\t${space_name}"
 	fi
 }
 
