@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo -e "Please note that if there are >50 results only the first 50 will be dsiplayed.\n"
+
+cf curl /v2/organizations | jq .resources[].entity.name
