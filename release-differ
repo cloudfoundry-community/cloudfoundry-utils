@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e
+
+if [[ -n ${BOSH_RELEASE_DIR} ]]; then
+	cd ${BOSH_RELEASE_DIR}
+fi
+
+function DEBUG {
+	if [[ -n ${DEBUG} && ${DEBUG} != "no" && ${DEBUG} != false && $DEBUG != 0 ]]; then
+		echo "DEBUG> $@" >&2
+	fi
+}
+
+tag1=$1
+tag2=$2
+
+if [[ -z ${tag1} || -z ${tag2} ]]; then
+	echo "Usage: release-differ <ref1> <ref2>"
+	exit 1
+fi
+
+if [[ ! -d jobs || ! -d templates ]]; then
+	echo "It does not look like you are in a bosh release directory. Either cd into one, or set BOSH_RELEASE_DIR"
+	exit 1
+fi
+
+SPECS=$(ls jobs/*/spec)
+TEMPLATES=$(find templates -type f -name '*.yml')
+SUBMODULES=$(git submodule | cut -d " " -f3)
+
+DEBUG specs: $SPECS
+DEBUG
+DEBUG templates: $TEMPLATES
+DEBUG
+
+for file in $SPECS $TEMPLATES; do
+	path=$(realpath --relative-to . $file)
+	for submodule in $SUBMODULES; do
+		if [[ $(echo $path | grep $submodule) ]]; then
+			DEBUG "$file is in $submodule"
+			commit1=$(git diff ${tag1}...${tag2} $submodule | egrep '^\-Subproject commit' | cut -d " " -f 3)
+			commit2=$(git diff ${tag1}...${tag2} $submodule | egrep '^\+Subproject commit' | cut -d " " -f 3)
+
+			if [[ -z $commit1 ]]; then
+				echo NEW FILE DETECTED: $file
+				echo -e "\033[32m"
+				cat $file
+				echo -e "\033[39m"
+			else
+				subpath=$(realpath --relative-to $submodule $file)
+				pushd $submodule
+				git -c 'color.ui=always' --no-pager diff ${commit1}...${commit2} $subpath
+				popd
+			fi
+		fi
+		git -c 'color.ui=always' --no-pager diff ${tag1}...${tag2} $file
+	done
+done
