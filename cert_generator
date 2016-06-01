@@ -1,0 +1,152 @@
+#!/bin/bash
+
+###############################################################################
+## Use these scripts locally to generate hm9000, dea_next and consul certs
+## which are required for Cloud Foundry v237+.  The results are merged into the
+## credentials.yml file for each genesis created site.
+##
+## Future improvement: copy the `properties` section into globals
+##
+###############################################################################
+
+set -e
+
+function cert_printer {
+	prefix=$1
+	shift
+
+	for line in $@; do
+		output=$(echo ${line} | tr -s "|" " ")
+		echo "${prefix}${output}"
+	done
+}
+
+go get -v github.com/square/certstrap >/dev/null
+
+depot_path="/tmp/cf_certs"
+
+mkdir -p ${depot_path}
+
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name cf-ca >/dev/null
+
+# consul server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name server.dc1.cf.internal >/dev/null
+certstrap --depot-path ${depot_path} sign server.dc1.cf.internal --CA cf-ca >/dev/null
+
+CA_CERT=$(cat ${depot_path}/cf-ca.crt | tr -s " " "|")
+
+# consul agent certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'consul agent' >/dev/null
+certstrap --depot-path ${depot_path} sign consul_agent --CA cf-ca >/dev/null
+
+CONSUL_ENCRYPT_KEY=`head -c 16 /dev/random | base64`
+CONSUL_CLIENT_KEY=$(cat ${depot_path}/consul_agent.key | tr -s " " "|")
+CONSUL_CLIENT_CERT=$(cat ${depot_path}/consul_agent.crt | tr -s " " "|")
+CONSUL_SERVER_KEY=$(cat ${depot_path}/server.dc1.cf.internal.key | tr -s " " "|")
+CONSUL_SERVER_CERT=$(cat ${depot_path}/server.dc1.cf.internal.crt | tr -s " " "|")
+
+# dea server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'dea.service.cf.internal' --domain 'dea.service.cf.internal,*.dea.service.cf.internal' >/dev/null
+certstrap --depot-path ${depot_path} sign dea.service.cf.internal --CA cf-ca >/dev/null
+
+# dea client certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'dea client' >/dev/null
+certstrap --depot-path ${depot_path} sign dea_client --CA cf-ca >/dev/null
+
+DEA_CLIENT_KEY=$(cat ${depot_path}/dea_client.key | tr -s " " "|")
+DEA_CLIENT_CERT=$(cat ${depot_path}/dea_client.crt | tr -s " " "|")
+DEA_SERVER_KEY=$(cat ${depot_path}/dea.service.cf.internal.key | tr -s " " "|")
+DEA_SERVER_CERT=$(cat ${depot_path}/dea.service.cf.internal.crt | tr -s " " "|")
+
+# etcd server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name etcd.service.consul --domain 'etcd.service.consul,*.etcd.service.consul' >/dev/null
+certstrap --depot-path ${depot_path} sign etcd.service.consul --CA cf-ca >/dev/null
+
+# etcd client certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'clientName' >/dev/null
+certstrap --depot-path ${depot_path} sign clientName -CA cf-ca >/dev/null
+
+ETCD_CLIENT_KEY=$(cat ${depot_path}/clientName.key | tr -s " " "|")
+ETCD_CLIENT_CERT=$(cat ${depot_path}/clientName.crt | tr -s " " "|")
+ETCD_SERVER_KEY=$(cat ${depot_path}/etcd.service.consul.key | tr -s " " "|")
+ETCD_SERVER_CERT=$(cat ${depot_path}/etcd.service.consul.crt | tr -s " " "|")
+
+# hm9000 server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name listener-hm9000.service.cf.internal --domain 'listener-hm9000.service.cf.internal,*.listener-hm9000.service.cf.internal' >/dev/null
+certstrap --depot-path ${depot_path} sign listener-hm9000.service.cf.internal --CA cf-ca >/dev/null
+
+# hm9000 client certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'hm9000_client' >/dev/null
+certstrap --depot-path ${depot_path} sign hm9000_client --CA cf-ca >/dev/null
+
+HM9K_CLIENT_KEY=$(cat ${depot_path}/hm9000_client.key | tr -s " " "|")
+HM9K_CLIENT_CERT=$(cat ${depot_path}/hm9000_client.crt | tr -s " " "|")
+HM9K_SERVER_KEY=$(cat ${depot_path}/listener-hm9000.service.cf.internal.key | tr -s " " "|")
+HM9K_SERVER_CERT=$(cat ${depot_path}/listener-hm9000.service.cf.internal.crt | tr -s " " "|")
+
+cat <<EOF
+meta:
+  certs:
+    ca_cert: |
+$(cert_printer "      " ${CA_CERT})
+    hm9000:
+      client_cert: |
+$(cert_printer "        " ${HM9K_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${HM9K_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${HM9K_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${HM9K_SERVER_KEY})
+    dea:
+      client_cert: |
+$(cert_printer "        " ${DEA_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${DEA_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${DEA_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${DEA_SERVER_KEY})
+    consul:
+      encrypt_key: ${CONSUL_ENCRYPT_KEY}
+      client_cert: |
+$(cert_printer "        " ${CONSUL_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${CONSUL_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${CONSUL_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${CONSUL_SERVER_KEY})
+    etcd:
+      client_cert: |
+$(cert_printer "        " ${ETCD_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${ETCD_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${ETCD_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${ETCD_SERVER_KEY})
+properties:
+  hm9000:
+    ca_cert: (( grab meta.certs.ca_cert ))
+    client_cert: (( grab meta.certs.hm9000.client_cert ))
+    client_key: (( grab meta.certs.hm9000.client_key ))
+    server_cert: (( grab meta.certs.hm9000.server_cert ))
+    server_key: (( grab meta.certs.hm9000.server_key ))
+  dea_next:
+    ca_cert: (( grab meta.certs.ca_cert ))
+    client_cert: (( grab meta.certs.dea.client_cert ))
+    client_key: (( grab meta.certs.dea.client_key ))
+    server_cert: (( grab meta.certs.dea.server_cert ))
+    server_key: (( grab meta.certs.dea.server_key ))
+  consul:
+    encrypt_keys:
+      - (( grab meta.certs.consul.encrypt_key ))
+    ca_cert: (( grab meta.certs.ca_cert ))
+    agent_cert: (( grab meta.certs.consul.client_cert ))
+    agent_key: (( grab meta.certs.consul.client_key ))
+    server_cert: (( grab meta.certs.consul.server_cert ))
+    server_key: (( grab meta.certs.consul.server_key ))
+EOF
+
+rm -rf ${depot_path}
