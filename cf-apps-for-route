@@ -1,0 +1,56 @@
+#!/bin/bash
+set -e
+
+debug() {
+	if [[ -n ${DEBUG} && ${DEBUG} != '0' ]];
+		then echo >&2 '>> ' "$*"
+	fi
+}
+
+function cf_curl() {
+	set -e
+	url=$1
+	md5=$(echo "${url}" | md5sum | cut -f1 -d " ")
+		path="${tmpdir}/${md5}"
+	if [[ ! -f $path ]]; then
+		debug "No cached data found - cf curl ${url}"
+		cf curl "${url}" > ${path}
+		if [[ -n ${TRACE} && ${TRACE} != '0' ]]; then
+			(cat ${path} | sed -e 's/^/    /') >&2
+		fi
+	fi
+	cat ${path}
+}
+
+ROUTE=$1
+if [[ -z $ROUTE ]]; then
+	echo >&2 "USAGE: $0 <route>"
+	exit 1
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf ${tmpdir?:nothing to remove}' INT TERM QUIT EXIT
+debug "set up workspace directory at ${tmpdir}"
+
+echo -e >&2 "...gathering data from Cloud Foundry (this may take a while )..."
+
+(
+echo "Organization|Space|Applicaton"
+echo "============|=====|=========="
+for url in $(cf_curl /v2/routes | jq -r '.resources[].metadata.url'); do
+	host=$(cf_curl $url | jq -r '.entity.host')
+	domain=$(cf_curl $(cf_curl $url | jq -r '.entity.domain_url') | jq -r '.entity.name')
+	debug "found route ${host}.${domain}..."
+	if [[ "${host}.${domain}" == ${ROUTE} ]]; then
+		for app_url in $(cf_curl $(cf_curl $url | jq -r '.entity.apps_url') | jq -r '.resources[].metadata.url'); do
+			name=$(cf_curl $app_url | jq -r '.entity.name')
+			debug " + found app ${name}"
+
+			#cf_curl $(cf_curl $app_url | jq -r '.entity.space_url')
+			org=$(cf_curl $(cf_curl $(cf_curl $app_url | jq -r '.entity.space_url') | jq -r '.entity.organization_url') | jq -r '.entity.name')
+			space=$(cf_curl $(cf_curl $app_url | jq -r '.entity.space_url') | jq -r '.entity.name')
+			echo "${org}|${space}|${name}"
+		done
+	fi
+done
+) | column -t -s '|'
