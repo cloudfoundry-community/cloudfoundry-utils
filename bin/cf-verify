@@ -33,7 +33,6 @@ for arg in "$@"; do
 		if [[ -z ${SYSDOMAIN} ]]; then
 			SYSDOMAIN=$arg
 		else
-			echo "registering app domain $arg"
 			APPDOMAINS+=($arg)
 		fi
 		;;
@@ -92,6 +91,7 @@ check_tls() {
 
 if [[ -n ${VERIFY_DNS} ]]; then
 	echo "==[ DNS Verification Report ]============================"
+	echo
 	echo "CHECKING SYSTEM DOMAIN"
 	check_dns     a.$SYSDOMAIN "    *.<system> wildcard"
 	check_dns   a.b.$SYSDOMAIN "  *.*.<system> wildcard"
@@ -119,6 +119,7 @@ fi
 
 if [[ -n ${VERIFY_TLS} ]]; then
 	echo "==[ TLS Verification Report ]============================"
+	echo
 	check_tls x.$SYSDOMAIN "*.<system> wildcard"
 
 	for subdomain in api login uaa; do
