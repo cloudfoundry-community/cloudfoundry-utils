@@ -5,9 +5,10 @@ SYSDOMAIN=
 APPDOMAINS=()
 VERIFY_DNS=
 VERIFY_TLS=
+CERT_VERIFY=yes
 
 usage() {
-	echo >&2 "USAGE: cf-verify [--dns] [--tls] SYS-DOMAIN [APP-DOMAIN ...]"
+	echo >&2 "USAGE: cf-verify [--dns] [--tls|--tls-verify] SYS-DOMAIN [APP-DOMAIN ...]"
 }
 for arg in "$@"; do
 	case ${arg} in
@@ -21,6 +22,12 @@ for arg in "$@"; do
 		;;
 	(--tls|--ssl)
 		VERIFY_TLS=yes
+		CERT_VERIFY=
+		;;
+
+	(--tls-verify|--ssl-verify)
+		VERIFY_TLS=yes
+		CERT_VERIFY=yes
 		;;
 
 	(-*)
@@ -75,8 +82,32 @@ check_tls() {
 	local label=$2
 
 	echo -n "validating $label... "
-	curl -s https://${check} 2>&1 >/dev/null
-	case $? in
+	if [[ -z $(dig +short $check) ]]; then
+		echo "FAILED!"
+		if [[ -z ${VERIFY_DNS} ]]; then
+			echo "  (DNS isn't resolving; try re-running cf-verify with the --dns option)"
+		else
+			echo "  (DNS isn't resolving; see above 'DNS Report')"
+		fi
+		echo
+		RC=1
+		return
+	fi
+
+	CURLOPTS=
+	if [[ -z ${CERT_VERIFY} ]]; then
+		if [[ -z ${WORKDIR:-} ]]; then
+			WORKDIR=$(mktemp -d)
+			trap "rm -rf ${WORKDIR}" INT QUIT TERM EXIT
+		fi
+		openssl s_client -connect ${check}:443 </dev/null -showcerts 2>&1 | sed -n '/BEGIN CERT/,/END CERT/p' > ${WORKDIR}/ca.pem
+		CURLOPTS="--cacert ${WORKDIR}/ca.pem"
+	fi
+
+	curl ${CURLOPTS} -s https://${check} 2>&1 >/dev/null
+	curlrc=$?
+
+	case $curlrc in
 	(0)
 		echo "OK"
 		;;
@@ -86,6 +117,14 @@ check_tls() {
 		openssl s_client -connect ${check}:443 -showcerts 2>&1 </dev/null | sed -e 's/^/  /g'
 		echo
 		RC=1
+		;;
+	(*)
+		echo "FAILED!"
+		echo "  curl https://$check exited $curlrc"
+		curl ${CURLOPTS} -vv --progress-bar https://${check} 2>&1 | sed -e 's/^/  /g'
+		echo
+		RC=1
+		;;
 	esac
 }
 
