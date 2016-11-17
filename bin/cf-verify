@@ -1,0 +1,135 @@
+#!/bin/bash
+#set -u
+
+SYSDOMAIN=
+APPDOMAINS=()
+VERIFY_DNS=
+VERIFY_TLS=
+
+usage() {
+	echo >&2 "USAGE: cf-verify [--dns] [--tls] SYS-DOMAIN [APP-DOMAIN ...]"
+}
+for arg in "$@"; do
+	case ${arg} in
+	(-h|--help)
+		usage
+		exit 1
+		;;
+
+	(--dns)
+		VERIFY_DNS=yes
+		;;
+	(--tls|--ssl)
+		VERIFY_TLS=yes
+		;;
+
+	(-*)
+		echo >&2 "Invalid flag '${arg}'"
+		usage
+		exit 1
+		;;
+
+	(*)
+		if [[ -z ${SYSDOMAIN} ]]; then
+			SYSDOMAIN=$arg
+		else
+			echo "registering app domain $arg"
+			APPDOMAINS+=($arg)
+		fi
+		;;
+	esac
+done
+
+if [[ "${VERIFY_DNS}${VERIFY_TLS}" = "" ]]; then
+	echo >&2 "You must specify --dns or --tls.  Otherwise, what would we verify?"
+	usage
+	exit 1
+fi
+
+if [[ -z ${SYSDOMAIN} ]]; then
+	echo >&2 "Please provide your Cloud Foundry system domain, at the very least..."
+	usage
+	exit 1
+fi
+
+RC=0
+check_dns() {
+	local check=$1
+	local label=$2
+
+	echo -n "validating $label... "
+	if [[ -z $(dig +short $check) ]]; then
+		echo " FAILED!"
+		echo "  $check did not resolve to anything"
+		echo "  ----------------------------------< dig diagnostics >--"
+		dig $check 2>&1 | sed -e 's/^/  /g'
+		echo "  -------------------------------------------------------"
+		echo
+		RC=1
+	else
+		echo "OK"
+	fi
+}
+
+check_tls() {
+	local check=$1
+	local label=$2
+
+	echo -n "validating $label... "
+	curl -s https://${check} 2>&1 >/dev/null
+	case $? in
+	(0)
+		echo "OK"
+		;;
+	(60)
+		echo "FAILED!"
+		echo "  https://$check presented an invalid or unverifiable certificate"
+		openssl s_client -connect ${check}:443 -showcerts 2>&1 </dev/null | sed -e 's/^/  /g'
+		echo
+		RC=1
+	esac
+}
+
+if [[ -n ${VERIFY_DNS} ]]; then
+	echo "==[ DNS Verification Report ]============================"
+	echo "CHECKING SYSTEM DOMAIN"
+	check_dns     a.$SYSDOMAIN "    *.<system> wildcard"
+	check_dns   a.b.$SYSDOMAIN "  *.*.<system> wildcard"
+	check_dns a.b.c.$SYSDOMAIN "*.*.*.<system> wildcard"
+	echo
+
+	echo "CHECKING CRITICAL SYSTEM SUB-DOMAINS"
+	for subdomain in api login uaa; do
+		check_dns       $subdomain.$SYSDOMAIN "      ${subdomain}.<system> sub-domain"
+		check_dns     x.$subdomain.$SYSDOMAIN "    *.${subdomain}.<system> wildcard"
+		check_dns x.y.z.$subdomain.$SYSDOMAIN "*.*.*.${subdomain}.<system> wildcard"
+		echo
+	done
+
+	for appdomain in "${APPDOMAINS[@]}"; do
+		echo "CHECKING APPLICATION DOMAIN"
+		check_dns     a.${appdomain} "    *.${appdomain} wildcard"
+		check_dns   a.b.${appdomain} "  *.*.${appdomain} wildcard"
+		check_dns a.b.c.${appdomain} "*.*.*.${appdomain} wildcard"
+		echo
+	done
+
+	echo; echo
+fi
+
+if [[ -n ${VERIFY_TLS} ]]; then
+	echo "==[ TLS Verification Report ]============================"
+	check_tls x.$SYSDOMAIN "*.<system> wildcard"
+
+	for subdomain in api login uaa; do
+		check_tls $subdomain.$SYSDOMAIN "${subdomain}.<system> sub-domain"
+	done
+
+	for appdomain in "${APPDOMAINS[@]}"; do
+		check_tls x.${appdomain} "*.${appdomain} wildcard"
+	done
+
+	echo; echo
+fi
+
+exit $RC
