@@ -50,7 +50,7 @@ ROOT=$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )
 pushd $REPO_ROOT
 
 mkdir artifacts
-for file in $(ls ${BIN_DIR}); do
+for file in $(cd ${BIN_DIR} && ls ${BINARIES}); do
   cp ${BIN_DIR}/${file} artifacts/${file}
   auto_sed artifacts/${file} "s/^VERSION=.*/VERSION=\"v${VERSION}\"/"
   artifacts/${file} -v | grep ${VERSION}

@@ -19,6 +19,9 @@ meta:
 
   image:    docker:///starkandwayne/concourse
 
+  binaries: '*'
+  bin_dir: bin
+
   aws:
     bucket:     (( concat meta.pipeline "-pipeline" ))
     access_key: (( param "Please set your AWS Access Key ID" ))
@@ -73,7 +76,8 @@ jobs:
               args: []
             params:
               REPO_ROOT: git
-              BIN_DIR: bin
+              BIN_DIR: (( grab meta.bin_dir ))
+              BINARIES: (( grab meta.binaries ))
         on_failure:
           put: notify
           params:
@@ -165,7 +169,8 @@ jobs:
               path: "git/ci/scripts/shipiit"
               args: []
             params:
-              BIN_DIR: bin
+              BIN_DIR: (( grab meta.bin_dir ))
+              BINARIES: (( grab meta.binaries ))
               REPO_ROOT: git
               VERSION_FROM: version/number
               RELEASE_NAME: (( grab meta.release ))
