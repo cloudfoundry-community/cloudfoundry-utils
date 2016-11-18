@@ -56,10 +56,10 @@ if [[ ! -d ${BIN_DIR} ]]; then
 	exit 1
 fi
 
-for file in $(cd ${BIN_DIR} && ls ${BINARIES}); do
-  cp ${BIN_DIR}/${file} artifacts/${file}
-  auto_sed artifacts/${file} "s/^VERSION=.*/VERSION=\"v${VERSION}\"/"
-  artifacts/${file} -v | grep ${VERSION}
+for bin in $(cd ${BIN_DIR} && ls ${BINARIES}); do
+  cp ${BIN_DIR}/${bin} artifacts/${bin}
+  auto_sed artifacts/${bin} "s/^VERSION=.*/VERSION=\"v${VERSION}\"/"
+  artifacts/${bin} -v | grep ${VERSION}
 done
 popd
 
