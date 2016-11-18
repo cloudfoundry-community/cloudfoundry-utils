@@ -3,6 +3,7 @@
 set -e
 
 cd ${REPO_ROOT}
+test -d ${BIN_DIR}
 for file in $(cd ${BIN_DIR} && ls ${BINARIES}); do
 	echo 'Verifying that `'${file}'` is a valid bash script'
 	${BIN_DIR}/$file -h >/dev/null 2>&1
