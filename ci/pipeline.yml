@@ -17,7 +17,7 @@ meta:
   target:   (( param "Please identify the name of the target Concourse CI" ))
   pipeline: (( grab meta.name ))
 
-  image:    (( concat "docker:///starkandwayne/concourse" ))
+  image:    docker:///starkandwayne/concourse
 
   aws:
     bucket:     (( concat meta.pipeline "-pipeline" ))
@@ -73,6 +73,7 @@ jobs:
               args: []
             params:
               REPO_ROOT: git
+              BIN_DIR: bin
         on_failure:
           put: notify
           params:
@@ -164,7 +165,7 @@ jobs:
               path: "git/ci/scripts/shipiit"
               args: []
             params:
-              BINDIR: bin
+              BIN_DIR: bin
               REPO_ROOT: git
               VERSION_FROM: version/number
               RELEASE_NAME: (( grab meta.release ))

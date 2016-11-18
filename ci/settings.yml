@@ -8,14 +8,14 @@ meta:
   initial_version: 1.0.0
 
   aws:
-    access_key: (( vault "secret/aws/cf-community:access" ))
-    secret_key: (( vault "secret/aws/cf-community:secret" ))
+    access_key: (( vault "secret/aws/cfcommunity:access" ))
+    secret_key: (( vault "secret/aws/cfcommunity:secret" ))
 
   github:
     owner: starkandwayne
     repo:  cloudfoundry-utils
     private_key:  (( vault "secret/pipelines/cloudfoundry-utils/github:private" ))
-    access_token: (( vault "secret/pipelines/cloudfoundry-utils/github:access_token" ))
+    access_token: (( vault "secret/pipelines/cloudfoundry-utils/github:token" ))
   slack:
     webhook: (( vault "secret/pipelines/cloudfoundry-utils/slack:webhook" ))
     channel: "#botspam"
