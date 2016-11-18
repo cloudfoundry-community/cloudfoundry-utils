@@ -166,7 +166,7 @@ jobs:
               - name: gh
               - name: pushme
             run:
-              path: "git/ci/scripts/shipiit"
+              path: "git/ci/scripts/shipit"
               args: []
             params:
               BIN_DIR: (( grab meta.bin_dir ))
