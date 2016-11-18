@@ -50,7 +50,12 @@ ROOT=$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )
 pushd $REPO_ROOT
 
 mkdir artifacts
-test -d ${BIN_DIR}
+
+if [[ ! -d ${BIN_DIR} ]]; then
+	echo "${BIN_DIR} does not exist as a directory inside ${REPO_ROOT}"
+	exit 1
+fi
+
 for file in $(cd ${BIN_DIR} && ls ${BINARIES}); do
   cp ${BIN_DIR}/${file} artifacts/${file}
   auto_sed artifacts/${file} "s/^VERSION=.*/VERSION=\"v${VERSION}\"/"
