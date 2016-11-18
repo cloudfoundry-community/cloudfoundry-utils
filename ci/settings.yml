@@ -3,6 +3,8 @@ meta:
   name: cloudfoundry-utils
   target: sw
 
+  url: https://ci.vsphere.starkandwayne.com
+
   initial_version: 1.0.0
 
   aws:
