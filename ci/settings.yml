@@ -1,0 +1,17 @@
+---
+meta:
+  name: cloudfoundry-utils
+  target: sw
+
+  aws:
+    access_key: (( vault "secret/aws/cf-community:access" ))
+    secret_key: (( vault "secret/aws/cf-community:secret" ))
+
+  github:
+    owner: starkandwayne
+    repo:  cloudfoundry-utils
+    private_key:  (( vault "secret/pipelines/cloudfoundry-utils/github:private" ))
+    access_token: (( vault "secret/pipelines/cloudfoundry-utils/github:access_token" ))
+  slack:
+    webhook: (( vault "secret/pipelines/cloudfoundry-utils/slack:webhook" ))
+    channel: "#botspam"
