@@ -1,6 +1,24 @@
 #!/bin/bash
 set -e
 
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: cf-apps-for-route <route>"
+	echo
+	echo  cf-apps-for-route takes an FQDN of an app hosted by Cloud Foudnry,
+	echo  and attempts to find the apps to which that domain is mapped.
+	echo
+	echo  Also included in the output are the Orgs + Spaces of the apps
+	echo  found, so you more easily target + manipulate those apps.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo cf-apps-for-route ${VERSION}
+	exit 0
+fi
+
 debug() {
 	if [[ -n ${DEBUG} && ${DEBUG} != '0' ]];
 		then echo >&2 '>> ' "$*"

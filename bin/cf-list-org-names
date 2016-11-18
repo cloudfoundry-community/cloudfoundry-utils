@@ -1,5 +1,20 @@
 #!/bin/bash
 
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: cf-list-org-names"
+	echo
+	echo  cf-list-org-names lists up tothe first 50 orgs configured
+	echo  in Cloud Foundry.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo cf-list-org-names ${VERSION}
+	exit 0
+fi
+
 echo -e "Please note that if there are >50 results only the first 50 will be dsiplayed.\n"
 
 cf curl /v2/organizations | jq .resources[].entity.name

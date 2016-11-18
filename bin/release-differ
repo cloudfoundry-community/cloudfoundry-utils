@@ -2,6 +2,28 @@
 
 set -e
 
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: release-differ <tag1> <tag2>"
+	echo
+	echo  release-differ makes a best-effort attempt to highlight the
+	echo  important differences between two commits on a BOSH release repo.
+	echo
+	echo  It will highlight changes in jobs/*/spec, as well as any .yml files
+	echo  in the templates directory
+	echo
+	echo  For releases that make use of git submodules, release-differ will attempt
+	echo  to diff related submodule changes, but might have some difficulties when files
+	echo  move from one submodule to another, or if submodules are renamed/removed/added.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo release-differ ${VERSION}
+	exit 0
+fi
+
 if [[ -n ${BOSH_RELEASE_DIR} ]]; then
 	cd ${BOSH_RELEASE_DIR}
 fi

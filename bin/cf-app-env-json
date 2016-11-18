@@ -2,6 +2,22 @@
 
 set -e
 
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: cf-app-env-json <app_name>"
+	echo
+	echo  cf-app-env-json grabs the CF app environment as a JSON
+	echo  datastructure, for parsing with utilities like jq.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo cf-app-env-json ${VERSION}
+	exit 0
+fi
+
+
 APP_NAME=$1
 SPACE_UUID=$(jq -r '.SpaceFields.Guid' < ~/.cf/config.json)
 APP_UUID=$(cf curl "/v2/spaces/${SPACE_UUID}/apps?q=name:${APP_NAME}&inline-relations-depth=1" | jq -r '.resources[0].metadata.guid')

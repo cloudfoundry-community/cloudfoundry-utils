@@ -1,6 +1,8 @@
 #!/bin/bash
 #set -u
 
+VERSION="(development build)"
+
 SYSDOMAIN=
 APPDOMAINS=()
 VERIFY_DNS=
@@ -12,9 +14,14 @@ usage() {
 }
 for arg in "$@"; do
 	case ${arg} in
-	(-h|--help)
+	(-h|-\?|--help)
 		usage
-		exit 1
+		exit 0
+		;;
+
+	(-v|--version)
+		echo cf-verify ${VERSION}
+		exit 0
 		;;
 
 	(--dns)

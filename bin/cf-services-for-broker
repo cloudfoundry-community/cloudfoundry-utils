@@ -1,6 +1,23 @@
 #!/bin/bash
 set -e
 
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: cf-services-for-broker broker-name"
+	echo
+	echo  cf-services-for-broker will find all service instances
+	echo  that have been created by a specific broker, and print out
+	echo  the service instance name, org and space in which it lies,
+	echo and what apps are bound to each service instance.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo cf-services-for-broker ${VERSION}
+	exit 0
+fi
+
 debug() {
 	if [[ -n ${DEBUG} && ${DEBUG} != '0' ]];
 		then echo >&2 '>> ' "$*"

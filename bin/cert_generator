@@ -11,6 +11,22 @@
 
 set -e
 
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: cert_generator"
+	echo
+	echo  cert_generator will generate hm9000, dea_next, and consul certs,
+	echo  required for Cloud Foundry v237+. Outputs all the certs in a yaml
+	echo  datastructure, for easier consumption into manifests via spruce.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo cert_generator ${VERSION}
+	exit 0
+fi
+
 function cert_printer {
 	prefix=$1
 	shift
