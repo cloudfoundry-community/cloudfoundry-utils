@@ -1,0 +1,44 @@
+#!/bin/bash
+set -u
+
+status_of() {
+	local space=$(cat ~/.cf/config.json | jq -r '.SpaceFields.GUID')
+	if [[ -z $space ]]; then
+		echo 2>&1 "no space targeted."
+		exit 1
+	fi
+	local guid=$(cf curl /v2/spaces/$space/service_instances | jq -r '.resources[] | select(.entity.name == "'$1'") | .metadata.guid')
+	if [[ -z $guid ]]; then
+		echo 2>&1 "service $1 not found."
+		exit 1
+	fi
+	local state=$(cf curl /v2/service_instances/$guid | jq -r '.entity.last_operation.state')
+	if [[ -z $state ]]; then
+		echo 2>&1 "failed to get status of service $1."
+		exit 1
+	fi
+	echo $state
+}
+
+SERVICE=${1:-}
+if [[ -z $SERVICE ]]; then
+	echo >&2 "USAGE: $0 NAME"
+	exit 1
+fi
+
+while true; do
+	STATE=$(status_of $SERVICE)
+	case $STATE in
+	(succeeded)
+		echo "Service $SERVICE finished provisioning succesfully."
+		exit 0
+		;;
+	(*progress)
+		sleep 5
+		;;
+	(*)
+		echo "Service $SERVICE is now in '$STATE' state."
+		exit 1
+		;;
+	esac
+done
