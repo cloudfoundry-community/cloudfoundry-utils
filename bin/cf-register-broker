@@ -1,0 +1,72 @@
+#!/bin/bash
+set -u
+
+registered() {
+	test -n $(cf curl /v2/service_brokers | jq -r '.resources[].entity | select(.name == "'$1'") | .broker_url')
+}
+
+broker_guid() {
+	cf curl /v2/service_brokers | jq -r '.resources[] | select(.entity.name == "'$1'") | .metadata.guid'
+}
+
+services_for() {
+	cf curl /v2/services | jq -r '.resources[].entity | select(.service_broker_guid == "'$1'") | .label'
+}
+
+usage() {
+	rc=${1:-0}
+	if [[ $rc -eq 0 ]]; then
+		echo "cf-register-broker - Create/Update a Service Broker"
+		echo "                     and enable service access to its services"
+		echo
+		echo "USAGE: $0 [-o ORG] NAME USERNAME PASSWORD URL"
+		echo
+		echo "  -o ORG    An optional Cloud Foundry organization to restrict"
+		echo "            service / plan access to."
+		echo
+	else
+		echo >&2 "USAGE: $0 [-o ORG] NAME USERNAME PASSWORD URL"
+	fi
+	exit $rc
+}
+
+main() {
+	local name=${1:-}
+	local user=${2:-}
+	local pass=${3:-}
+	local url=${4:-}
+
+	if [[ -z ${name} || -z ${user} || -z ${pass} || -z ${url} ]]; then
+		echo >&2 "Missing required argument"
+		usage 1
+	fi
+
+	if registered $name; then
+		(set -x ; cf update-service-broker $name $user $pass $url) || exit 1
+	else
+		(set -x ; cf create-service-broker $name $user $pass $url) || exit 1
+	fi
+
+	for s in $(services_for $(broker_guid $name)); do
+		if [[ -n ${ORG} ]]; then
+			(set -x ; cf enable-service-access -o $ORG $s) || exit 1
+		else
+			(set -x ; cf enable-service-access $s) || exit 1
+		fi
+	done
+}
+
+ORG=
+while getopts :ho: OPT; do
+case $OPT in
+(h) usage 0     ;;
+(o) ORG=$OPTARG ;;
+(*)
+	echo >&2 "Unrecognized option $OPTARG..."
+	usage 1
+	;;
+esac
+done
+shift $((OPTIND-1))
+
+main "$@"
