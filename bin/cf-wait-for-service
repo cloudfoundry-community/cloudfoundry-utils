@@ -1,6 +1,8 @@
 #!/bin/bash
 set -u
 
+VERSION="(development version)"
+
 status_of() {
 	local space=$(cat ~/.cf/config.json | jq -r '.SpaceFields.GUID')
 	if [[ -z $space ]]; then
@@ -24,6 +26,21 @@ SERVICE=${1:-}
 if [[ -z $SERVICE ]]; then
 	echo >&2 "USAGE: $0 NAME"
 	exit 1
+fi
+
+if [[ ${SERVICE} == "-v" || ${SERVICE} == "--version" ]]; then
+	echo cf-wait-for-service ${VERSION}
+	exit 0
+fi
+if [[ ${SERVICE} == "-h" || ${SERVICE} == "--help" ]]; then
+	echo Usage: "cf-wait-for-service <instance-name>"
+	echo
+	echo cf-wait-for-service watches asynchronously created
+	echo Cloud Foundry service instances, to finish creating
+	echo either succesfully or not, so that you can rely
+	echo on a service being fully created in your automation.
+	echo
+	exit 0
 fi
 
 while true; do
