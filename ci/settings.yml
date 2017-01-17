@@ -12,7 +12,7 @@ meta:
     secret_key: (( vault "secret/aws/cfcommunity:secret" ))
 
   github:
-    owner: starkandwayne
+    owner: cloudfoundry-community
     repo:  cloudfoundry-utils
     private_key:  (( vault "secret/pipelines/cloudfoundry-utils/github:private" ))
     access_token: (( vault "secret/pipelines/cloudfoundry-utils/github:token" ))
