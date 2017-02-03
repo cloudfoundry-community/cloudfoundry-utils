@@ -9,15 +9,15 @@
 ##
 ###############################################################################
 
-set -e
+set -e -x
 
 VERSION="(development build)"
 
 if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
 	echo "Usage: cert_generator"
 	echo
-	echo  cert_generator will generate hm9000, dea_next, and consul certs,
-	echo  required for Cloud Foundry v237+. Outputs all the certs in a yaml
+	echo  cert_generator will generate hm9000, dea_next, etcd, bbs and consul
+	echo  certs required for Cloud Foundry v243+. Outputs all the certs in a yaml
 	echo  datastructure, for easier consumption into manifests via spruce.
 	exit 0
 fi
@@ -51,6 +51,10 @@ certstrap --depot-path ${depot_path} sign server.dc1.cf.internal --CA cf-ca >/de
 
 CA_CERT=$(cat ${depot_path}/cf-ca.crt | tr -s " " "|")
 
+#############################################################################
+# Consul
+#############################################################################
+
 # consul agent certs
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'consul agent' >/dev/null
 certstrap --depot-path ${depot_path} sign consul_agent --CA cf-ca >/dev/null
@@ -60,6 +64,10 @@ CONSUL_CLIENT_KEY=$(cat ${depot_path}/consul_agent.key | tr -s " " "|")
 CONSUL_CLIENT_CERT=$(cat ${depot_path}/consul_agent.crt | tr -s " " "|")
 CONSUL_SERVER_KEY=$(cat ${depot_path}/server.dc1.cf.internal.key | tr -s " " "|")
 CONSUL_SERVER_CERT=$(cat ${depot_path}/server.dc1.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# DEA
+#############################################################################
 
 # dea server certs
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'dea.service.cf.internal' --domain 'dea.service.cf.internal,*.dea.service.cf.internal' >/dev/null
@@ -74,18 +82,70 @@ DEA_CLIENT_CERT=$(cat ${depot_path}/dea_client.crt | tr -s " " "|")
 DEA_SERVER_KEY=$(cat ${depot_path}/dea.service.cf.internal.key | tr -s " " "|")
 DEA_SERVER_CERT=$(cat ${depot_path}/dea.service.cf.internal.crt | tr -s " " "|")
 
+#############################################################################
+# ETCD
+#############################################################################
+
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name etcdCA >/dev/null #etcdCA.crl, etcdCA.crt, etcdCA.key
+
 # etcd server certs
-certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name etcd.service.consul --domain 'etcd.service.consul,*.etcd.service.consul' >/dev/null
-certstrap --depot-path ${depot_path} sign etcd.service.consul --CA cf-ca >/dev/null
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name cf-etcd.service.cf.internal --domain '*.cf-etcd.service.cf.internal,cf-etcd.service.cf.internal' >/dev/null #cf-etcd.service.cf.internal.csr, cf-etcd.service.cf.internal.key
+certstrap --depot-path ${depot_path} sign cf-etcd.service.cf.internal --CA etcdCA >/dev/null  #cf-etcd.service.cf.internal.crt
 
 # etcd client certs
-certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'clientName' >/dev/null
-certstrap --depot-path ${depot_path} sign clientName -CA cf-ca >/dev/null
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'clientName' >/dev/null #clientName.csr, clientName.key
+certstrap --depot-path ${depot_path} sign clientName -CA etcdCA >/dev/null # clientName.crt
 
+ETCD_CA_CERT=$(cat ${depot_path}/etcdCA.crt | tr -s " " "|")
 ETCD_CLIENT_KEY=$(cat ${depot_path}/clientName.key | tr -s " " "|")
 ETCD_CLIENT_CERT=$(cat ${depot_path}/clientName.crt | tr -s " " "|")
-ETCD_SERVER_KEY=$(cat ${depot_path}/etcd.service.consul.key | tr -s " " "|")
-ETCD_SERVER_CERT=$(cat ${depot_path}/etcd.service.consul.crt | tr -s " " "|")
+ETCD_SERVER_KEY=$(cat ${depot_path}/cf-etcd.service.cf.internal.key | tr -s " " "|")
+ETCD_SERVER_CERT=$(cat ${depot_path}/cf-etcd.service.cf.internal.crt | tr -s " " "|")
+
+# etcd peer
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name peerCA >/dev/null #peerCA.key, peerCA.crt, peerCA.crl
+rm -f ${depot_path}/cf-etcd.service.cf.internal.csr  #clear previous creation for etcd ca cert
+rm -f ${depot_path}/cf-etcd.service.cf.internal.key
+rm -f ${depot_path}/cf-etcd.service.cf.internal.crt
+
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name cf-etcd.service.cf.internal --domain '*.cf-etcd.service.cf.internal,cf-etcd.service.cf.internal' >/dev/null  # cf-etcd.service.cf.internal.csr, cf-etcd.service.cf.internal.key
+certstrap --depot-path ${depot_path} sign cf-etcd.service.cf.internal --CA peerCA >/dev/null
+
+ETCD_PEER_CA_CERT=$(cat ${depot_path}/peerCA.crt | tr -s " " "|")
+ETCD_PEER_KEY=$(cat ${depot_path}/cf-etcd.service.cf.internal.key | tr -s " " "|")
+ETCD_PEER_CERT=$(cat ${depot_path}/cf-etcd.service.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# BBS
+#############################################################################
+server_cn=bbs.service.cf.internal
+server_domain='*.bbs.service.cf.internal,bbs.service.cf.internal'
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null #bbs.service.cf.internal.key, bbs.service.cf.internal.csr
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-ca >/dev/null # bbs.service.cf.internal.crt
+
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'bbs client' >/dev/null # bbs_client.key, bbs_client.csr
+certstrap --depot-path ${depot_path} sign bbs_client --CA cf-ca >/dev/null # bbs_client.crt
+
+BBS_CLIENT_KEY=$(cat ${depot_path}/bbs_client.key | tr -s " " "|")
+BBS_CLIENT_CERT=$(cat ${depot_path}/bbs_client.crt | tr -s " " "|")
+BBS_SERVER_KEY=$(cat ${depot_path}/bbs.service.cf.internal.key | tr -s " " "|")
+BBS_SERVER_CERT=$(cat ${depot_path}/bbs.service.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# UAA
+#############################################################################
+server_cn=uaa.service.cf.internal
+server_domain="*.uaa.service.cf.internal,*.uaa.${DOMAIN},uaa.${DOMAIN},*.login.${DOMAIN},login.${DOMAIN}"
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-ca >/dev/null
+
+UAA_SERVER_KEY=$(cat ${depot_path}/uaa.service.cf.internal.key | tr -s " " "|")
+UAA_SERVER_CERT=$(cat ${depot_path}/uaa.service.cf.internal.crt | tr -s " " "|")
+
+
+#############################################################################
+# hm9000
+#############################################################################
 
 # hm9000 server certs
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name listener-hm9000.service.cf.internal --domain 'listener-hm9000.service.cf.internal,*.listener-hm9000.service.cf.internal' >/dev/null
@@ -134,15 +194,51 @@ $(cert_printer "        " ${CONSUL_SERVER_CERT})
       server_key: |
 $(cert_printer "        " ${CONSUL_SERVER_KEY})
     etcd:
+      ca_cert: |
+$(cert_printer "        " ${ETCD_CA_CERT})
       client_cert: |
 $(cert_printer "        " ${ETCD_CLIENT_CERT})
       client_key: |
 $(cert_printer "        " ${ETCD_CLIENT_KEY})
+      peer_ca_cert: |
+$(cert_printer "        " ${ETCD_PEER_CA_CERT})
+      peer_cert: |
+$(cert_printer "        " ${ETCD_PEER_CERT})
+      peer_key: |
+$(cert_printer "        " ${ETCD_PEER_KEY})
       server_cert: |
 $(cert_printer "        " ${ETCD_SERVER_CERT})
       server_key: |
 $(cert_printer "        " ${ETCD_SERVER_KEY})
+  uaa:
+    server_cert: |
+$(cert_printer "        " ${UAA_SERVER_CERT})
+    server_key: |
+$(cert_printer "        " ${UAA_SERVER_KEY})
+
+  bbs:
+    client_cert: |
+$(cert_printer "        " ${CA_CERT})
+    client_cert: |
+$(cert_printer "        " ${BBS_CLIENT_CERT})
+    client_key: |
+$(cert_printer "        " ${BBS_CLIENT_KEY})
+    server_cert: |
+$(cert_printer "        " ${BBS_SERVER_CERT})
+    server_key: |
+$(cert_printer "        " ${BBS_SERVER_KEY})
+
+
 properties:
+  etcd:
+    ca_cert: (( grab meta.certs.etcd.ca_cert ))
+    client_cert: (( grab meta.certs.etcd.client_cert ))
+    client_key: (( grab meta.certs.etcd.client_key ))
+    server_cert: (( grab meta.certs.etcd.server_cert ))
+    server_key: (( grab meta.certs.etcd.server_key ))
+    peer_ca_cert: (( grab meta.certs.etcd.peer_ca_cert ))
+    peer_cert: (( grab meta.certs.etcd.peer_cert ))
+    peer_key: (( grab meta.certs.etcd.peer_key ))
   hm9000:
     ca_cert: (( grab meta.certs.ca_cert ))
     client_cert: (( grab meta.certs.hm9000.client_cert ))
@@ -163,6 +259,9 @@ properties:
     agent_key: (( grab meta.certs.consul.client_key ))
     server_cert: (( grab meta.certs.consul.server_cert ))
     server_key: (( grab meta.certs.consul.server_key ))
+  uaa:
+    sslCertificate: (( grab meta.certs.uaa.server_crt ))
+    sslPrivateKey: (( grab meta.certs.uaa.server_key ))
 EOF
 
 rm -rf ${depot_path}
