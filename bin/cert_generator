@@ -9,7 +9,7 @@
 ##
 ###############################################################################
 
-set -e -x
+set -e
 
 VERSION="(development build)"
 
@@ -210,10 +210,10 @@ $(cert_printer "        " ${ETCD_PEER_KEY})
 $(cert_printer "        " ${ETCD_SERVER_CERT})
       server_key: |
 $(cert_printer "        " ${ETCD_SERVER_KEY})
-  uaa:
-    server_cert: |
+    uaa:
+      server_cert: |
 $(cert_printer "        " ${UAA_SERVER_CERT})
-    server_key: |
+      server_key: |
 $(cert_printer "        " ${UAA_SERVER_KEY})
 
   bbs:
