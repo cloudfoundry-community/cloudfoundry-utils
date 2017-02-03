@@ -217,7 +217,7 @@ $(cert_printer "        " ${UAA_SERVER_CERT})
 $(cert_printer "        " ${UAA_SERVER_KEY})
 
   bbs:
-    client_cert: |
+    ca_cert: |
 $(cert_printer "        " ${CA_CERT})
     client_cert: |
 $(cert_printer "        " ${BBS_CLIENT_CERT})
