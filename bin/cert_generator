@@ -2,7 +2,7 @@
 
 ###############################################################################
 ## Use these scripts locally to generate hm9000, dea_next and consul certs
-## which are required for Cloud Foundry v237+.  The results are merged into the
+## which are required for Cloud Foundry v243+.  The results are merged into the
 ## credentials.yml file for each genesis created site.
 ##
 ## Future improvement: copy the `properties` section into globals
@@ -27,6 +27,7 @@ if [[ $1 == "-v" || $1 == "--version" ]]; then
 	exit 0
 fi
 
+
 function cert_printer {
 	prefix=$1
 	shift
@@ -36,6 +37,15 @@ function cert_printer {
 		echo "${prefix}${output}"
 	done
 }
+
+#This version now requires a system domain to be passed in as a parameter, for example: system.bosh-lite.io
+DOMAIN=$1
+if [[ -z ${DOMAIN} ]]; then
+  echo "You must specify a CF domain name system.xxx"
+  exit 1
+fi
+
+echo "domain is: ${DOMAIN}"
 
 go get -v github.com/square/certstrap >/dev/null
 
