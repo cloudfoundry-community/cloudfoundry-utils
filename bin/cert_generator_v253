@@ -1,0 +1,563 @@
+#!/bin/bash
+
+###############################################################################
+## Use these scripts locally to generate hm9000, dea_next and consul certs
+## which are required for Cloud Foundry v253+.  The results are merged into the
+## credentials.yml file for each genesis created site.
+##
+## Future improvement: copy the `properties` section into globals
+##
+###############################################################################
+
+set -e
+
+VERSION="(development build)"
+
+if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
+	echo "Usage: cert_generator"
+	echo
+	echo  cert_generator will generate hm9000, dea_next, etcd, bbs and consul
+	echo  certs required for Cloud Foundry v253. Outputs all the certs in a yaml
+	echo  datastructure, for easier consumption into manifests via spruce.
+	exit 0
+fi
+
+if [[ $1 == "-v" || $1 == "--version" ]]; then
+	echo cert_generator ${VERSION}
+	exit 0
+fi
+
+
+function cert_printer {
+	prefix=$1
+	shift
+
+	for line in $@; do
+		output=$(echo ${line} | tr -s "|" " ")
+		echo "${prefix}${output}"
+	done
+}
+
+#This version now requires a system domain to be passed in as a parameter, for example: system.bosh-lite.io
+DOMAIN=$1
+if [[ -z ${DOMAIN} ]]; then
+  echo "You must specify a CF domain name system.xxx"
+  exit 1
+fi
+
+echo "domain is: ${DOMAIN}"
+
+go get -v github.com/square/certstrap >/dev/null
+
+depot_path="/tmp/cf_certs"
+
+mkdir -p ${depot_path}
+
+#############################################################################
+# Generate CA Cert (global) and component (clique) (note: some are embedded)
+#############################################################################
+
+
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name cf-ca >/dev/null
+CA_CERT=$(cat ${depot_path}/cf-ca.crt | tr -s " " "|")
+
+
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name cf-diego-ca >/dev/null
+CF_DIEGO_CA_CERT=$(cat ${depot_path}/cf-diego-ca.crt | tr -s " " "|")
+
+#############################################################################
+# Diego - Cloud Controller
+#############################################################################
+
+# Server certificate for cloud controller to act as a TLS server
+cc_cn=cloud-controller-ng.service.cf.internal
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $cc_cn >/dev/null
+certstrap --depot-path ${depot_path} sign $cc_cn --CA cf-diego-ca >/dev/null
+
+CLOUD_CONTROLLER_KEY=$(cat ${depot_path}/$cc_cn.key | tr -s " " "|")
+CLOUD_CONTROLLER_CERT=$(cat ${depot_path}/$cc_cn.crt | tr -s " " "|")
+
+
+#############################################################################
+# Diego - TPS
+#############################################################################
+
+
+client_cn='tps_watcher'
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $client_cn >/dev/null
+certstrap --depot-path ${depot_path} sign $client_cn --CA cf-diego-ca >/dev/null
+
+CAPI_TPS_KEY=$(cat ${depot_path}/${client_cn}.key | tr -s " " "|")
+CAPI_TPS_CERT=$(cat ${depot_path}/${client_cn}.crt | tr -s " " "|")
+
+#############################################################################
+# Diego - Rep
+#############################################################################
+
+# Server certificate to share across all reps
+server_cn=cell.service.cf.internal
+server_domain='*.cell.service.cf.internal,cell.service.cf.internal'
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-diego-ca >/dev/null
+
+# Client certificate to distribute to jobs that access rep
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'rep client' >/dev/null
+certstrap --depot-path ${depot_path} sign rep_client --CA cf-diego-ca >/dev/null
+
+REP_CLIENT_KEY=$(cat ${depot_path}/rep_client.key | tr -s " " "|")
+REP_CLIENT_CERT=$(cat ${depot_path}/rep_client.crt | tr -s " " "|")
+REP_SERVER_KEY=$(cat ${depot_path}/${server_cn}.key | tr -s " " "|")
+REP_SERVER_CERT=$(cat ${depot_path}/${server_cn}.crt | tr -s " " "|")
+
+#############################################################################
+# Diego - Auctioneer
+#############################################################################
+
+# Server certificate to share across the auctioneer cluster
+server_cn=auctioneer.service.cf.internal
+server_domain='auctioneer.service.cf.internal'
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-diego-ca >/dev/null
+
+# Client certificate to distribute to jobs that access rep
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'auctioneer client' >/dev/null
+certstrap --depot-path ${depot_path} sign auctioneer_client --CA cf-diego-ca >/dev/null
+
+AUCTIONEER_CLIENT_KEY=$(cat ${depot_path}/rep_client.key | tr -s " " "|")
+AUCTIONEER_CLIENT_CERT=$(cat ${depot_path}/rep_client.crt | tr -s " " "|")
+AUCTIONEER_SERVER_KEY=$(cat ${depot_path}/${server_cn}.key | tr -s " " "|")
+AUCTIONEER_SERVER_CERT=$(cat ${depot_path}/${server_cn}.crt | tr -s " " "|")
+
+
+#############################################################################
+# Diego - Loggregator
+#############################################################################
+
+
+# Doppler certificate
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name doppler >/dev/null
+certstrap --depot-path ${depot_path} sign doppler --CA cf-diego-ca >/dev/null
+
+LOGGREGATOR_DOPPLER_CLIENT_KEY=$(cat ${depot_path}/doppler.key | tr -s " " "|")
+LOGGREGATOR_DOPPLER_CLIENT_CERT=$(cat ${depot_path}/doppler.crt | tr -s " " "|")
+
+# Traffic Controller certificate
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name trafficcontroller >/dev/null
+certstrap --depot-path ${depot_path} sign trafficcontroller --CA cf-diego-ca >/dev/null
+
+LOGGREGATOR_TRAFFICCONTROLLER_CLIENT_KEY=$(cat ${depot_path}/trafficcontroller.key | tr -s " " "|")
+LOGGREGATOR_TRAFFICCONTROLLER_CLIENT_CERT=$(cat ${depot_path}/trafficcontroller.crt | tr -s " " "|")
+
+# Metron certificate
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name metron >/dev/null
+certstrap --depot-path ${depot_path} sign metron --CA cf-diego-ca >/dev/null
+
+LOGGREGATOR_METRON_CLIENT_KEY=$(cat ${depot_path}/metron.key | tr -s " " "|")
+LOGGREGATOR_METRON_CLIENT_CERT=$(cat ${depot_path}/metron.crt | tr -s " " "|")
+
+# Reverse Log Proxy certificate
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name reverselogproxy >/dev/null
+certstrap --depot-path ${depot_path} sign reverselogproxy --CA cf-diego-ca >/dev/null
+
+LOGGREGATOR_LOGPROXY_CLIENT_KEY=$(cat ${depot_path}/reverselogproxy.key | tr -s " " "|")
+LOGGREGATOR_LOGPROXY_CLIENT_CERT=$(cat ${depot_path}/reverselogproxy.crt | tr -s " " "|")
+
+
+# Syslog drain binder certificate
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name syslogdrainbinder >/dev/null
+certstrap --depot-path ${depot_path} sign syslogdrainbinder --CA cf-diego-ca >/dev/null
+
+LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY=$(cat ${depot_path}/syslogdrainbinder.key | tr -s " " "|")
+LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_CERT=$(cat ${depot_path}/syslogdrainbinder.crt | tr -s " " "|")
+
+
+# Statsd injector certificate
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name statsdinjector >/dev/null
+certstrap --depot-path ${depot_path} sign statsdinjector --CA cf-diego-ca >/dev/null
+
+LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY=$(cat ${depot_path}/statsdinjector.key | tr -s " " "|")
+LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT=$(cat ${depot_path}/statsdinjector.crt | tr -s " " "|")
+
+
+
+#############################################################################
+# Consul
+#############################################################################
+
+# consul server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name server.dc1.cf.internal >/dev/null
+certstrap --depot-path ${depot_path} sign server.dc1.cf.internal --CA cf-ca >/dev/null
+
+# consul agent certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'consul agent' >/dev/null
+certstrap --depot-path ${depot_path} sign consul_agent --CA cf-ca >/dev/null
+
+CONSUL_ENCRYPT_KEY=`head -c 16 /dev/random | base64`
+CONSUL_CLIENT_KEY=$(cat ${depot_path}/consul_agent.key | tr -s " " "|")
+CONSUL_CLIENT_CERT=$(cat ${depot_path}/consul_agent.crt | tr -s " " "|")
+CONSUL_SERVER_KEY=$(cat ${depot_path}/server.dc1.cf.internal.key | tr -s " " "|")
+CONSUL_SERVER_CERT=$(cat ${depot_path}/server.dc1.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# DEA
+#############################################################################
+
+# dea server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'dea.service.cf.internal' --domain 'dea.service.cf.internal,*.dea.service.cf.internal' >/dev/null
+certstrap --depot-path ${depot_path} sign dea.service.cf.internal --CA cf-ca >/dev/null
+
+# dea client certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'dea client' >/dev/null
+certstrap --depot-path ${depot_path} sign dea_client --CA cf-ca >/dev/null
+
+DEA_CLIENT_KEY=$(cat ${depot_path}/dea_client.key | tr -s " " "|")
+DEA_CLIENT_CERT=$(cat ${depot_path}/dea_client.crt | tr -s " " "|")
+DEA_SERVER_KEY=$(cat ${depot_path}/dea.service.cf.internal.key | tr -s " " "|")
+DEA_SERVER_CERT=$(cat ${depot_path}/dea.service.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# ETCD
+#############################################################################
+
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name etcdCA >/dev/null #etcdCA.crl, etcdCA.crt, etcdCA.key
+
+# etcd server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name cf-etcd.service.cf.internal --domain '*.cf-etcd.service.cf.internal,cf-etcd.service.cf.internal' >/dev/null #cf-etcd.service.cf.internal.csr, cf-etcd.service.cf.internal.key
+certstrap --depot-path ${depot_path} sign cf-etcd.service.cf.internal --CA etcdCA >/dev/null  #cf-etcd.service.cf.internal.crt
+
+# etcd client certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'clientName' >/dev/null #clientName.csr, clientName.key
+certstrap --depot-path ${depot_path} sign clientName -CA etcdCA >/dev/null # clientName.crt
+
+ETCD_CA_CERT=$(cat ${depot_path}/etcdCA.crt | tr -s " " "|")
+ETCD_CLIENT_KEY=$(cat ${depot_path}/clientName.key | tr -s " " "|")
+ETCD_CLIENT_CERT=$(cat ${depot_path}/clientName.crt | tr -s " " "|")
+ETCD_SERVER_KEY=$(cat ${depot_path}/cf-etcd.service.cf.internal.key | tr -s " " "|")
+ETCD_SERVER_CERT=$(cat ${depot_path}/cf-etcd.service.cf.internal.crt | tr -s " " "|")
+
+# etcd peer
+certstrap --depot-path ${depot_path} init --passphrase '' --common-name peerCA >/dev/null #peerCA.key, peerCA.crt, peerCA.crl
+rm -f ${depot_path}/cf-etcd.service.cf.internal.csr  #clear previous creation for etcd ca cert
+rm -f ${depot_path}/cf-etcd.service.cf.internal.key
+rm -f ${depot_path}/cf-etcd.service.cf.internal.crt
+
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name cf-etcd.service.cf.internal --domain '*.cf-etcd.service.cf.internal,cf-etcd.service.cf.internal' >/dev/null  # cf-etcd.service.cf.internal.csr, cf-etcd.service.cf.internal.key
+certstrap --depot-path ${depot_path} sign cf-etcd.service.cf.internal --CA peerCA >/dev/null
+
+ETCD_PEER_CA_CERT=$(cat ${depot_path}/peerCA.crt | tr -s " " "|")
+ETCD_PEER_KEY=$(cat ${depot_path}/cf-etcd.service.cf.internal.key | tr -s " " "|")
+ETCD_PEER_CERT=$(cat ${depot_path}/cf-etcd.service.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# BBS
+#############################################################################
+server_cn=bbs.service.cf.internal
+server_domain='*.bbs.service.cf.internal,bbs.service.cf.internal'
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null #bbs.service.cf.internal.key, bbs.service.cf.internal.csr
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-diego-ca >/dev/null # bbs.service.cf.internal.crt
+
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'bbs client' >/dev/null # bbs_client.key, bbs_client.csr
+certstrap --depot-path ${depot_path} sign bbs_client --CA cf-diego-ca >/dev/null # bbs_client.crt
+
+BBS_CLIENT_KEY=$(cat ${depot_path}/bbs_client.key | tr -s " " "|")
+BBS_CLIENT_CERT=$(cat ${depot_path}/bbs_client.crt | tr -s " " "|")
+BBS_SERVER_KEY=$(cat ${depot_path}/bbs.service.cf.internal.key | tr -s " " "|")
+BBS_SERVER_CERT=$(cat ${depot_path}/bbs.service.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# UAA
+#############################################################################
+server_cn=uaa.service.cf.internal
+server_domain="*.uaa.service.cf.internal,*.uaa.${DOMAIN},uaa.${DOMAIN},*.login.${DOMAIN},login.${DOMAIN}"
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-ca >/dev/null
+
+UAA_SERVER_KEY=$(cat ${depot_path}/uaa.service.cf.internal.key | tr -s " " "|")
+UAA_SERVER_CERT=$(cat ${depot_path}/uaa.service.cf.internal.crt | tr -s " " "|")
+
+
+#############################################################################
+# hm9000
+#############################################################################
+
+# hm9000 server certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name listener-hm9000.service.cf.internal --domain 'listener-hm9000.service.cf.internal,*.listener-hm9000.service.cf.internal' >/dev/null
+certstrap --depot-path ${depot_path} sign listener-hm9000.service.cf.internal --CA cf-ca >/dev/null
+
+# hm9000 client certs
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name 'hm9000_client' >/dev/null
+certstrap --depot-path ${depot_path} sign hm9000_client --CA cf-ca >/dev/null
+
+HM9K_CLIENT_KEY=$(cat ${depot_path}/hm9000_client.key | tr -s " " "|")
+HM9K_CLIENT_CERT=$(cat ${depot_path}/hm9000_client.crt | tr -s " " "|")
+HM9K_SERVER_KEY=$(cat ${depot_path}/listener-hm9000.service.cf.internal.key | tr -s " " "|")
+HM9K_SERVER_CERT=$(cat ${depot_path}/listener-hm9000.service.cf.internal.crt | tr -s " " "|")
+
+cat <<EOF
+meta:
+  certs:
+    ca_cert: |
+$(cert_printer "      " ${CA_CERT})
+    hm9000:
+      client_cert: |
+$(cert_printer "        " ${HM9K_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${HM9K_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${HM9K_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${HM9K_SERVER_KEY})
+    dea:
+      client_cert: |
+$(cert_printer "        " ${DEA_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${DEA_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${DEA_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${DEA_SERVER_KEY})
+    consul:
+      encrypt_key: ${CONSUL_ENCRYPT_KEY}
+      client_cert: |
+$(cert_printer "        " ${CONSUL_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${CONSUL_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${CONSUL_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${CONSUL_SERVER_KEY})
+    etcd:
+      ca_cert: |
+$(cert_printer "        " ${ETCD_CA_CERT})
+      client_cert: |
+$(cert_printer "        " ${ETCD_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${ETCD_CLIENT_KEY})
+      peer_ca_cert: |
+$(cert_printer "        " ${ETCD_PEER_CA_CERT})
+      peer_cert: |
+$(cert_printer "        " ${ETCD_PEER_CERT})
+      peer_key: |
+$(cert_printer "        " ${ETCD_PEER_KEY})
+      server_cert: |
+$(cert_printer "        " ${ETCD_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${ETCD_SERVER_KEY})
+    uaa:
+      server_cert: |
+$(cert_printer "        " ${UAA_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${UAA_SERVER_KEY})
+
+    cf_diego_ca_cert: |
+$(cert_printer "      " ${CF_DIEGO_CA_CERT})
+    mutual_tls:
+      public_cert: |
+$(cert_printer "        " ${CLOUD_CONTROLLER_CERT})
+      private_key: |
+$(cert_printer "        " ${CLOUD_CONTROLLER_KEY})
+    tps:
+      client_cert: |
+$(cert_printer "        " ${CAPI_TPS_CERT})
+      client_key: |
+$(cert_printer "        " ${CAPI_TPS_KEY})
+    loggregator:
+      doppler:
+        cert:
+$(cert_printer "          " ${LOGGREGATOR_DOPPLER_CLIENT_CERT})
+        key:
+$(cert_printer "          " ${LOGGREGATOR_DOPPLER_CLIENT_KEY})
+      trafficcontroller:
+        cert:
+$(cert_printer "          " ${LOGGREGATOR_TRAFFICCONTROLLER_CLIENT_CERT})
+        key:
+$(cert_printer "          " ${LOGGREGATOR_TRAFFICCONTROLLER_CLIENT_KEY})
+      metron:
+        cert:
+$(cert_printer "          " ${LOGGREGATOR_METRON_CLIENT_CERT})
+        key:
+$(cert_printer "          " ${LOGGREGATOR_METRON_CLIENT_KEY})
+      logproxy:
+        cert:
+$(cert_printer "          " ${LOGGREGATOR_LOGPROXY_CLIENT_CERT})
+        key:
+$(cert_printer "          " ${LOGGREGATOR_LOGPROXY_CLIENT_KEY})
+      syslogdrainbinder:
+        cert:
+$(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_CERT})
+        key:
+$(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY})
+      statsdinjector:
+        cert:
+$(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT})
+        key:
+$(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY})
+
+
+
+    rep:
+      client_cert: |
+$(cert_printer "        " ${REP_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${REP_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${REP_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${REP_SERVER_KEY})
+
+    auctioneer:
+      client_cert: |
+$(cert_printer "        " ${AUCTIONEER_CLIENT_CERT})
+      client_key: |
+$(cert_printer "        " ${AUCTIONEER_CLIENT_KEY})
+      server_cert: |
+$(cert_printer "        " ${AUCTIONEER_SERVER_CERT})
+      server_key: |
+$(cert_printer "        " ${AUCTIONEER_SERVER_KEY})
+
+  bbs:
+    ca_cert: |
+$(cert_printer "      " ${CA_CERT})
+    client_cert: |
+$(cert_printer "      " ${BBS_CLIENT_CERT})
+    client_key: |
+$(cert_printer "      " ${BBS_CLIENT_KEY})
+    server_cert: |
+$(cert_printer "      " ${BBS_SERVER_CERT})
+    server_key: |
+$(cert_printer "      " ${BBS_SERVER_KEY})
+
+
+
+
+
+properties:
+  etcd:
+    ca_cert: (( grab meta.certs.etcd.ca_cert ))
+    client_cert: (( grab meta.certs.etcd.client_cert ))
+    client_key: (( grab meta.certs.etcd.client_key ))
+    server_cert: (( grab meta.certs.etcd.server_cert ))
+    server_key: (( grab meta.certs.etcd.server_key ))
+    peer_ca_cert: (( grab meta.certs.etcd.peer_ca_cert ))
+    peer_cert: (( grab meta.certs.etcd.peer_cert ))
+    peer_key: (( grab meta.certs.etcd.peer_key ))
+  hm9000:
+    ca_cert: (( grab meta.certs.ca_cert ))
+    client_cert: (( grab meta.certs.hm9000.client_cert ))
+    client_key: (( grab meta.certs.hm9000.client_key ))
+    server_cert: (( grab meta.certs.hm9000.server_cert ))
+    server_key: (( grab meta.certs.hm9000.server_key ))
+  dea_next:
+    ca_cert: (( grab meta.certs.ca_cert ))
+    client_cert: (( grab meta.certs.dea.client_cert ))
+    client_key: (( grab meta.certs.dea.client_key ))
+    server_cert: (( grab meta.certs.dea.server_cert ))
+    server_key: (( grab meta.certs.dea.server_key ))
+  consul:
+    encrypt_keys:
+      - (( grab meta.certs.consul.encrypt_key ))
+    ca_cert: (( grab meta.certs.ca_cert ))
+    agent_cert: (( grab meta.certs.consul.client_cert ))
+    agent_key: (( grab meta.certs.consul.client_key ))
+    server_cert: (( grab meta.certs.consul.server_cert ))
+    server_key: (( grab meta.certs.consul.server_key ))
+  uaa:
+    sslCertificate: (( grab meta.certs.uaa.server_crt ))
+    sslPrivateKey: (( grab meta.certs.uaa.server_key ))
+  capi:
+    tps:
+      cc:
+       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+       client_cert (( grab meta.certs.tps.client_cert ))
+       client_key (( grab meta.certs.tps.client_key ))
+  cc:
+    buildpacks:
+      webdav_config:
+        ca_cert: (( grab meta.certs.ca_cert ))
+    droplets:
+      webdav_config:
+        ca_cert: (( grab meta.certs.ca_cert ))
+    packages:
+      webdav_config:
+        ca_cert: (( grab meta.certs.ca_cert ))
+    resource_pool:
+      webdav_config:
+        ca_cert: (( grab meta.certs.ca_cert ))
+
+    mutual_tls:
+      ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+      public_cert: (( grab meta.certs.mutual_tls.public_cert ))
+      private_key: (( grab meta.certs.mutual_tls.private_key ))
+  diego:
+    bbs:
+      ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+      server_cert: (( grab meta.bbs.server_cert ))
+      server_key: (( grab meta.bbs.server_key ))
+      auctioneer:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        client_cert: (( grab meta.certs.auctioneer.client_cert ))
+        client_key: (( grab meta.certs.auctioneer.client_key ))
+    auctioneer:
+      ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+      server_cert: (( grab meta.certs.auctioneer.server_cert ))
+      server_key: (( grab meta.certs.auctioneer.server_key ))
+      bbs:
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
+    cfdot:
+      bbs:
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
+
+    route_emitter:
+      bbs:
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
+
+    ssh_proxy:
+      bbs:
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
+
+
+    rep:
+      ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+      server_cert: (( grab meta.certs.rep.server_cert ))
+      server_key: (( grab meta.certs.rep.server_key ))
+      auctioneer:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        rep:
+          ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+          client_cert: (( grab meta.certs.rep.client_cert ))
+          client_key: (( grab meta.certs.rep.client_key ))
+      bbs:
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
+        rep:
+          ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+          client_cert: (( grab meta.certs.rep.client_cert ))
+          client_key: (( grab meta.certs.rep.client_key ))
+  loggregator:
+    tls:
+      ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+      doppler
+        cert: (( grab meta.certs.loggregator.doppler.cert  ))
+        key: (( grab meta.certs.loggregator.doppler.key ))
+      metron:
+        cert: (( grab meta.certs.loggregator.metron.cert ))
+        key: (( grab meta.certs.loggregator.metron.key ))
+      trafficcontroller:
+        cert: (( grab meta.certs.loggregator.trafficcontroller.cert ))
+        key: (( grab meta.certs.loggregator.trafficcontroller.key ))
+      syslogdrainbinder:
+        cert: (( grab meta.certs.loggregator.syslogdrainbinder.cert ))
+        key: (( grab meta.certs.loggregator.syslogdrainbinder.key ))
+      statsdinjector:
+        cert: (( grab meta.certs.loggregator.statsdinjector.cert ))
+        key: (( grab meta.certs.loggregator.statsdinjector.key ))
+
+
+
+EOF
+
+rm -rf ${depot_path}
