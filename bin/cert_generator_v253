@@ -14,28 +14,28 @@ set -e
 VERSION="(development build)"
 
 if [[ $1 == "-?" || $1 == "-h" || $1 == "--help" ]]; then
-	echo "Usage: cert_generator"
-	echo
-	echo  cert_generator will generate hm9000, dea_next, etcd, bbs and consul
-	echo  certs required for Cloud Foundry v253. Outputs all the certs in a yaml
-	echo  datastructure, for easier consumption into manifests via spruce.
-	exit 0
+  echo "Usage: cert_generator"
+  echo
+  echo  cert_generator will generate hm9000, dea_next, etcd, bbs and consul
+  echo  certs required for Cloud Foundry v253. Outputs all the certs in a yaml
+  echo  datastructure, for easier consumption into manifests via spruce.
+  exit 0
 fi
 
 if [[ $1 == "-v" || $1 == "--version" ]]; then
-	echo cert_generator ${VERSION}
-	exit 0
+  echo cert_generator ${VERSION}
+  exit 0
 fi
 
 
 function cert_printer {
-	prefix=$1
-	shift
+  prefix=$1
+  shift
 
-	for line in $@; do
-		output=$(echo ${line} | tr -s "|" " ")
-		echo "${prefix}${output}"
-	done
+  for line in "$@"; do
+    output=$(echo ${line} | tr -s "|" " ")
+    echo "${prefix}${output}"
+  done
 }
 
 #This version now requires a system domain to be passed in as a parameter, for example: system.bosh-lite.io
@@ -57,10 +57,8 @@ mkdir -p ${depot_path}
 # Generate CA Cert (global) and component (clique) (note: some are embedded)
 #############################################################################
 
-
 certstrap --depot-path ${depot_path} init --passphrase '' --common-name cf-ca >/dev/null
 CA_CERT=$(cat ${depot_path}/cf-ca.crt | tr -s " " "|")
-
 
 certstrap --depot-path ${depot_path} init --passphrase '' --common-name cf-diego-ca >/dev/null
 CF_DIEGO_CA_CERT=$(cat ${depot_path}/cf-diego-ca.crt | tr -s " " "|")
@@ -77,11 +75,9 @@ certstrap --depot-path ${depot_path} sign $cc_cn --CA cf-diego-ca >/dev/null
 CLOUD_CONTROLLER_KEY=$(cat ${depot_path}/$cc_cn.key | tr -s " " "|")
 CLOUD_CONTROLLER_CERT=$(cat ${depot_path}/$cc_cn.crt | tr -s " " "|")
 
-
 #############################################################################
 # Diego - TPS
 #############################################################################
-
 
 client_cn='tps_watcher'
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $client_cn >/dev/null
@@ -128,11 +124,9 @@ AUCTIONEER_CLIENT_CERT=$(cat ${depot_path}/rep_client.crt | tr -s " " "|")
 AUCTIONEER_SERVER_KEY=$(cat ${depot_path}/${server_cn}.key | tr -s " " "|")
 AUCTIONEER_SERVER_CERT=$(cat ${depot_path}/${server_cn}.crt | tr -s " " "|")
 
-
 #############################################################################
 # Diego - Loggregator
 #############################################################################
-
 
 # Doppler certificate
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name doppler >/dev/null
@@ -162,7 +156,6 @@ certstrap --depot-path ${depot_path} sign reverselogproxy --CA cf-diego-ca >/dev
 LOGGREGATOR_LOGPROXY_CLIENT_KEY=$(cat ${depot_path}/reverselogproxy.key | tr -s " " "|")
 LOGGREGATOR_LOGPROXY_CLIENT_CERT=$(cat ${depot_path}/reverselogproxy.crt | tr -s " " "|")
 
-
 # Syslog drain binder certificate
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name syslogdrainbinder >/dev/null
 certstrap --depot-path ${depot_path} sign syslogdrainbinder --CA cf-diego-ca >/dev/null
@@ -170,15 +163,12 @@ certstrap --depot-path ${depot_path} sign syslogdrainbinder --CA cf-diego-ca >/d
 LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY=$(cat ${depot_path}/syslogdrainbinder.key | tr -s " " "|")
 LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_CERT=$(cat ${depot_path}/syslogdrainbinder.crt | tr -s " " "|")
 
-
 # Statsd injector certificate
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name statsdinjector >/dev/null
 certstrap --depot-path ${depot_path} sign statsdinjector --CA cf-diego-ca >/dev/null
 
 LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY=$(cat ${depot_path}/statsdinjector.key | tr -s " " "|")
 LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT=$(cat ${depot_path}/statsdinjector.crt | tr -s " " "|")
-
-
 
 #############################################################################
 # Consul
@@ -392,9 +382,6 @@ $(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY})
 $(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT})
         key:
 $(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY})
-
-
-
     rep:
       client_cert: |
 $(cert_printer "        " ${REP_CLIENT_CERT})
@@ -404,7 +391,6 @@ $(cert_printer "        " ${REP_CLIENT_KEY})
 $(cert_printer "        " ${REP_SERVER_CERT})
       server_key: |
 $(cert_printer "        " ${REP_SERVER_KEY})
-
     auctioneer:
       client_cert: |
 $(cert_printer "        " ${AUCTIONEER_CLIENT_CERT})
@@ -414,7 +400,6 @@ $(cert_printer "        " ${AUCTIONEER_CLIENT_KEY})
 $(cert_printer "        " ${AUCTIONEER_SERVER_CERT})
       server_key: |
 $(cert_printer "        " ${AUCTIONEER_SERVER_KEY})
-
   bbs:
     ca_cert: |
 $(cert_printer "      " ${CA_CERT})
@@ -426,10 +411,6 @@ $(cert_printer "      " ${BBS_CLIENT_KEY})
 $(cert_printer "      " ${BBS_SERVER_CERT})
     server_key: |
 $(cert_printer "      " ${BBS_SERVER_KEY})
-
-
-
-
 
 properties:
   etcd:
@@ -464,8 +445,30 @@ properties:
   uaa:
     sslCertificate: (( grab meta.certs.uaa.server_crt ))
     sslPrivateKey: (( grab meta.certs.uaa.server_key ))
+
+# NEW
   capi:
+    nsync:
+      bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
+    stager:
+      bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
     tps:
+      bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
+        client_cert: (( grab meta.bbs.client_cert ))
+        client_key: (( grab meta.bbs.client_key ))
       cc:
        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
        client_cert (( grab meta.certs.tps.client_cert ))
@@ -483,7 +486,6 @@ properties:
     resource_pool:
       webdav_config:
         ca_cert: (( grab meta.certs.ca_cert ))
-
     mutual_tls:
       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
       public_cert: (( grab meta.certs.mutual_tls.public_cert ))
@@ -502,24 +504,30 @@ properties:
       server_cert: (( grab meta.certs.auctioneer.server_cert ))
       server_key: (( grab meta.certs.auctioneer.server_key ))
       bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
     cfdot:
       bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
-
     route_emitter:
       bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
-
     ssh_proxy:
       bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
-
-
     rep:
       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
       server_cert: (( grab meta.certs.rep.server_cert ))
@@ -531,6 +539,9 @@ properties:
           client_cert: (( grab meta.certs.rep.client_cert ))
           client_key: (( grab meta.certs.rep.client_key ))
       bbs:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        server_cert: (( grab meta.bbs.server_cert ))
+        server_key: (( grab meta.bbs.server_key ))
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
         rep:
@@ -555,8 +566,6 @@ properties:
       statsdinjector:
         cert: (( grab meta.certs.loggregator.statsdinjector.cert ))
         key: (( grab meta.certs.loggregator.statsdinjector.key ))
-
-
 
 EOF
 
