@@ -471,8 +471,8 @@ properties:
         client_key: (( grab meta.bbs.client_key ))
       cc:
        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
-       client_cert (( grab meta.certs.tps.client_cert ))
-       client_key (( grab meta.certs.tps.client_key ))
+       client_cert: (( grab meta.certs.tps.client_cert ))
+       client_key: (( grab meta.certs.tps.client_key ))
   cc:
     buildpacks:
       webdav_config:
@@ -551,7 +551,7 @@ properties:
   loggregator:
     tls:
       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
-      doppler
+      doppler:
         cert: (( grab meta.certs.loggregator.doppler.cert  ))
         key: (( grab meta.certs.loggregator.doppler.key ))
       metron:
