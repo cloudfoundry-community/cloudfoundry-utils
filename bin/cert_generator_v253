@@ -353,34 +353,34 @@ $(cert_printer "        " ${CAPI_TPS_CERT})
 $(cert_printer "        " ${CAPI_TPS_KEY})
     loggregator:
       doppler:
-        cert:
+        cert: |
 $(cert_printer "          " ${LOGGREGATOR_DOPPLER_CLIENT_CERT})
-        key:
+        key: |
 $(cert_printer "          " ${LOGGREGATOR_DOPPLER_CLIENT_KEY})
       trafficcontroller:
-        cert:
+        cert: |
 $(cert_printer "          " ${LOGGREGATOR_TRAFFICCONTROLLER_CLIENT_CERT})
-        key:
+        key: |
 $(cert_printer "          " ${LOGGREGATOR_TRAFFICCONTROLLER_CLIENT_KEY})
       metron:
-        cert:
+        cert: |
 $(cert_printer "          " ${LOGGREGATOR_METRON_CLIENT_CERT})
-        key:
+        key: |
 $(cert_printer "          " ${LOGGREGATOR_METRON_CLIENT_KEY})
       logproxy:
-        cert:
+        cert: |
 $(cert_printer "          " ${LOGGREGATOR_LOGPROXY_CLIENT_CERT})
-        key:
+        key: |
 $(cert_printer "          " ${LOGGREGATOR_LOGPROXY_CLIENT_KEY})
       syslogdrainbinder:
-        cert:
+        cert: |
 $(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_CERT})
-        key:
+        key: |
 $(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY})
       statsdinjector:
-        cert:
+        cert: |
 $(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT})
-        key:
+        key: |
 $(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY})
     rep:
       client_cert: |
