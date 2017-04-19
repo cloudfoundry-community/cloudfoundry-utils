@@ -463,11 +463,11 @@ properties:
     sslCertificate: (( grab meta.certs.uaa.server_crt ))
     sslPrivateKey: (( grab meta.certs.uaa.server_key ))
     ca_cert: (( grab meta.certs.ca_cert ))
-    login:
-      saml:
-        serviceProviderKey: (( grab meta.certs.saml.serviceProviderKey ))
-        serviceProviderKeyPassword: ""
-        serviceProviderCertificate: (( grab meta.certs.saml.serviceProviderCertificate ))
+  login:
+    saml:
+      serviceProviderKey: (( grab meta.certs.saml.serviceProviderKey ))
+      serviceProviderKeyPassword: ""
+      serviceProviderCertificate: (( grab meta.certs.saml.serviceProviderCertificate ))
 
 # NEW
   ssh_proxy:
