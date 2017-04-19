@@ -164,11 +164,11 @@ LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY=$(cat ${depot_path}/syslogdrainbinder.k
 LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_CERT=$(cat ${depot_path}/syslogdrainbinder.crt | tr -s " " "|")
 
 # Statsd injector certificate
-certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name statsdinjector >/dev/null
-certstrap --depot-path ${depot_path} sign statsdinjector --CA cf-diego-ca >/dev/null
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name statsd_injector >/dev/null
+certstrap --depot-path ${depot_path} sign statsd_injector --CA cf-diego-ca >/dev/null
 
-LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY=$(cat ${depot_path}/statsdinjector.key | tr -s " " "|")
-LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT=$(cat ${depot_path}/statsdinjector.crt | tr -s " " "|")
+LOGGREGATOR_STATSD_INJECTOR_CLIENT_KEY=$(cat ${depot_path}/statsd_injector.key | tr -s " " "|")
+LOGGREGATOR_STATSD_INJECTOR_CLIENT_CERT=$(cat ${depot_path}/statsd_injector.crt | tr -s " " "|")
 
 #############################################################################
 # Consul
@@ -258,7 +258,7 @@ BBS_SERVER_CERT=$(cat ${depot_path}/bbs.service.cf.internal.crt | tr -s " " "|")
 # UAA
 #############################################################################
 server_cn=uaa.service.cf.internal
-server_domain="*.uaa.service.cf.internal,*.uaa.${DOMAIN},uaa.${DOMAIN},*.login.${DOMAIN},login.${DOMAIN}"
+server_domain="uaa.service.cf.internal,*.uaa.service.cf.internal,*.uaa.${DOMAIN},uaa.${DOMAIN},*.login.${DOMAIN},login.${DOMAIN}"
 certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null
 certstrap --depot-path ${depot_path} sign $server_cn --CA cf-ca >/dev/null
 
@@ -282,6 +282,17 @@ HM9K_CLIENT_KEY=$(cat ${depot_path}/hm9000_client.key | tr -s " " "|")
 HM9K_CLIENT_CERT=$(cat ${depot_path}/hm9000_client.crt | tr -s " " "|")
 HM9K_SERVER_KEY=$(cat ${depot_path}/listener-hm9000.service.cf.internal.key | tr -s " " "|")
 HM9K_SERVER_CERT=$(cat ${depot_path}/listener-hm9000.service.cf.internal.crt | tr -s " " "|")
+
+#############################################################################
+# SAML
+#############################################################################
+server_cn=login.${DOMAIN}
+server_domain=login.${DOMAIN}
+certstrap --depot-path ${depot_path} request-cert --passphrase '' --common-name $server_cn --domain $server_domain >/dev/null
+certstrap --depot-path ${depot_path} sign $server_cn --CA cf-ca >/dev/null
+
+SAML_SERVER_KEY=$(cat ${depot_path}/login.${DOMAIN}.key | tr -s " " "|")
+SAML_SERVER_CERT=$(cat ${depot_path}/login.${DOMAIN}.crt | tr -s " " "|")
 
 cat <<EOF
 meta:
@@ -339,6 +350,12 @@ $(cert_printer "        " ${UAA_SERVER_CERT})
       server_key: |
 $(cert_printer "        " ${UAA_SERVER_KEY})
 
+    saml:
+      serviceProviderCertificate: |
+$(cert_printer "        " ${SAML_SERVER_CERT})
+      serviceProviderKey: |
+$(cert_printer "        " ${SAML_SERVER_KEY})
+
     cf_diego_ca_cert: |
 $(cert_printer "      " ${CF_DIEGO_CA_CERT})
     mutual_tls:
@@ -377,11 +394,11 @@ $(cert_printer "          " ${LOGGREGATOR_LOGPROXY_CLIENT_KEY})
 $(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_CERT})
         key: |
 $(cert_printer "          " ${LOGGREGATOR_SYSLOGDRAINBINDER_CLIENT_KEY})
-      statsdinjector:
+      statsd_injector:
         cert: |
-$(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_CERT})
+$(cert_printer "          " ${LOGGREGATOR_STATSD_INJECTOR_CLIENT_CERT})
         key: |
-$(cert_printer "          " ${LOGGREGATOR_STATSDINJECTOR_CLIENT_KEY})
+$(cert_printer "          " ${LOGGREGATOR_STATSD_INJECTOR_CLIENT_KEY})
     rep:
       client_cert: |
 $(cert_printer "        " ${REP_CLIENT_CERT})
@@ -445,8 +462,18 @@ properties:
   uaa:
     sslCertificate: (( grab meta.certs.uaa.server_crt ))
     sslPrivateKey: (( grab meta.certs.uaa.server_key ))
+    ca_cert: (( grab meta.certs.ca_cert ))
+    login:
+      saml:
+        serviceProviderKey: (( grab meta.certs.saml.serviceProviderKey ))
+        serviceProviderKeyPassword: ""
+        serviceProviderCertificate: (( grab meta.certs.saml.serviceProviderCertificate ))
 
 # NEW
+  ssh_proxy:
+    uaa:
+      ca_cert: (( grab meta.certs.uaa.ca_cert ))
+
   capi:
     nsync:
       bbs:
@@ -499,6 +526,11 @@ properties:
         ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
         client_cert: (( grab meta.certs.auctioneer.client_cert ))
         client_key: (( grab meta.certs.auctioneer.client_key ))
+      rep:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        client_cert: (( grab meta.certs.rep.client_cert ))
+        client_key: (( grab meta.certs.rep.client_key ))
+        require_tls: true
     auctioneer:
       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
       server_cert: (( grab meta.certs.auctioneer.server_cert ))
@@ -509,6 +541,11 @@ properties:
         client_key: (( grab meta.bbs.client_key ))
         server_cert: (( grab meta.bbs.server_cert ))
         server_key: (( grab meta.bbs.server_key ))
+      rep:
+        ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
+        client_cert: (( grab meta.certs.rep.client_cert ))
+        client_key: (( grab meta.certs.rep.client_key ))
+        require_tls: true
     cfdot:
       bbs:
         ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
@@ -528,6 +565,8 @@ properties:
         server_key: (( grab meta.bbs.server_key ))
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
+      uaa:
+        ca_cert: (( grab meta.certs.uaa.ca_cert ))
     rep:
       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
       server_cert: (( grab meta.certs.rep.server_cert ))
@@ -563,10 +602,9 @@ properties:
       syslogdrainbinder:
         cert: (( grab meta.certs.loggregator.syslogdrainbinder.cert ))
         key: (( grab meta.certs.loggregator.syslogdrainbinder.key ))
-      statsdinjector:
-        cert: (( grab meta.certs.loggregator.statsdinjector.cert ))
-        key: (( grab meta.certs.loggregator.statsdinjector.key ))
-
+      statsd_injector:
+        cert: (( grab meta.certs.loggregator.statsd_injector.cert ))
+        key: (( grab meta.certs.loggregator.statsd_injector.key ))
 EOF
 
 rm -rf ${depot_path}
