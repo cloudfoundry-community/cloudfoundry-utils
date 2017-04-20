@@ -460,7 +460,7 @@ properties:
     server_cert: (( grab meta.certs.consul.server_cert ))
     server_key: (( grab meta.certs.consul.server_key ))
   uaa:
-    sslCertificate: (( grab meta.certs.uaa.server_crt ))
+    sslCertificate: (( grab meta.certs.uaa.server_cert ))
     sslPrivateKey: (( grab meta.certs.uaa.server_key ))
     ca_cert: (( grab meta.certs.ca_cert ))
   login:
@@ -472,7 +472,7 @@ properties:
 # NEW
   ssh_proxy:
     uaa:
-      ca_cert: (( grab meta.certs.uaa.ca_cert ))
+      ca_cert: (( grab meta.certs.ca_cert ))
 
   capi:
     nsync:
@@ -566,7 +566,7 @@ properties:
         client_cert: (( grab meta.bbs.client_cert ))
         client_key: (( grab meta.bbs.client_key ))
       uaa:
-        ca_cert: (( grab meta.certs.uaa.ca_cert ))
+        ca_cert: (( grab meta.certs.ca_cert ))
     rep:
       ca_cert: (( grab meta.certs.cf_diego_ca_cert ))
       server_cert: (( grab meta.certs.rep.server_cert ))
