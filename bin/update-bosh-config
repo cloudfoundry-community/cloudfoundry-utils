@@ -9,6 +9,10 @@ usage() {
 	exit 1
 }
 
+if [[ $1 == "-h" || $1 == "--help" ]]; then
+	usage
+fi
+
 if [[ $1 != "runtime" && $1 != "cloud" ]]; then
 	echo "Unrecognized command: '$1'" >&2
 	usage
