@@ -47,7 +47,7 @@ if [[ -z ${SPRUCE} ]]; then
 fi
 
 tmpfile=$(mktemp)
-trap "rm -f $tmpfile" EXIT QUIT INT TERM
+trap "rm -f $tmpfile && echo && exit" EXIT QUIT INT TERM
 
 ${BOSH} ${TARGET} ${mode}-config > $tmpfile
 echo Updating ${mode}-config...
