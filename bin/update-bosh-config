@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# This script exists to work around https://github.com/cloudfoundry/bosh-cli/issues/7
+# Once that issue is resolved, and the BOSH cli can provide built-in diffs of cloud/runtime
+# config, this script should no longer be used.
+
+usage() {
+	echo "USAGE: $0 <runtime|cloud> config-file.yml my-bosh-alias" >&2
+	exit 1
+}
+
+if [[ $1 != "runtime" && $1 != "cloud" ]]; then
+	echo "Unrecognized command: '$1'" >&2
+	usage
+fi
+mode=$1
+
+if [[ ! -f $2 && ! -r $2 ]]; then
+	echo "Unable to find file '$2' to update ${mode}-config from" >&2
+	usage
+fi
+new_config=$2
+
+if [[ -z $3 ]]; then
+	echo "No BOSH target/environment specified" >&2
+	usage
+fi
+director=$3
+
+BOSH=$(which bosh2)
+if [[ -z $BOSH ]]; then
+	BOSH=$(which bosh)
+fi
+
+if ${BOSH} -v | grep "version" >/dev/null; then
+	UPDATE_CMD="update-${mode}-config"
+	TARGET="-e ${director}"
+else
+	UPDATE_CMD="update ${mode}-config"
+	TARGET="-t ${director}"
+fi
+
+SPRUCE=$(which spruce)
+if [[ -z ${SPRUCE} ]]; then
+	echo "spruce v1.8.10 or greater is required" >&2
+	exit 1
+fi
+
+tmpfile=$(mktemp)
+trap "rm -f $tmpfile" EXIT QUIT INT TERM
+
+${BOSH} ${TARGET} ${mode}-config > $tmpfile
+echo Updating ${mode}-config...
+
+spruce diff "${tmpfile}" "${new_config}"
+
+while true; do
+	read -p "Are you sure you wish to apply these changes? (y/n) " yn
+	case $yn in
+		y|Y|yes|Yes|YES )
+			break;;
+		* )
+			exit;;
+	esac
+done
+
+${BOSH} -n ${TARGET} ${UPDATE_CMD} ${new_config}
