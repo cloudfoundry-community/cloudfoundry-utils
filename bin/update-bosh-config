@@ -6,28 +6,28 @@
 
 usage() {
 	echo "USAGE: $0 <runtime|cloud> config-file.yml my-bosh-alias" >&2
-	exit 1
+	exit $1
 }
 
 if [[ $1 == "-h" || $1 == "--help" ]]; then
-	usage
+	usage 0
 fi
 
 if [[ $1 != "runtime" && $1 != "cloud" ]]; then
 	echo "Unrecognized command: '$1'" >&2
-	usage
+	usage 1
 fi
 mode=$1
 
 if [[ ! -f $2 && ! -r $2 ]]; then
 	echo "Unable to find file '$2' to update ${mode}-config from" >&2
-	usage
+	usage 1
 fi
 new_config=$2
 
 if [[ -z $3 ]]; then
 	echo "No BOSH target/environment specified" >&2
-	usage
+	usage 1
 fi
 director=$3
 
