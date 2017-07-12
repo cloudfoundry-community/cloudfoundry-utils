@@ -17,7 +17,7 @@ meta:
   target:   (( param "Please identify the name of the target Concourse CI" ))
   pipeline: (( grab meta.name ))
 
-  image:    docker:///starkandwayne/concourse
+  image:    starkandwayne/concourse
 
   binaries: '*'
   bin_dir: bin
@@ -68,7 +68,10 @@ jobs:
         - task: test
           config:
             platform: linux
-            rootfs_uri: (( grab meta.image ))
+            image_resource:
+              type: docker-image
+              source:
+                repository: (( grab meta.image ))
             inputs:
               - name: git
             run:
@@ -157,7 +160,10 @@ jobs:
         - name: release
           task: release
           config:
-            rootfs_uri: (( grab meta.image ))
+            image_resource:
+              type: docker-image
+              source:
+                repository: (( grab meta.image ))
             platform: linux
             inputs:
               - name: version
