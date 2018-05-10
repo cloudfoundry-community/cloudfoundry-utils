@@ -55,27 +55,31 @@ echo -e >&2 "...gathering data from Cloud Foundry (this may take a while )..."
 (
 echo "Organization|Space|Applicaton"
 echo "============|=====|=========="
-for url in $(cf_curl /v2/routes | jq -r '.resources[].metadata.url'); do
-	host=$(cf_curl $url | jq -r '.entity.host')
-	domain=$(cf_curl $(cf_curl $url | jq -r '.entity.domain_url') | jq -r '.entity.name')
-	debug "found route ${host}.${domain}..."
-	if [[ "${host}.${domain}" == ${ROUTE} ]]; then
-		n=0
-		for app_url in $(cf_curl $(cf_curl $url | jq -r '.entity.apps_url') | jq -r '.resources[].metadata.url'); do
-			name=$(cf_curl $app_url | jq -r '.entity.name')
-			debug " + found app ${name}"
-			n=$((n + 1))
+next="/v2/routes";
+while [[ ${next} != "null" ]]; do
+	for url in $(cf_curl $next | jq -r '.resources[].metadata.url'); do
+		host=$(cf_curl $url | jq -r '.entity.host')
+		domain=$(cf_curl $(cf_curl $url | jq -r '.entity.domain_url') | jq -r '.entity.name')
+		debug "found route ${host}.${domain}..."
+		if [[ "${host}.${domain}" == ${ROUTE} ]]; then
+			n=0
+			for app_url in $(cf_curl $(cf_curl $url | jq -r '.entity.apps_url') | jq -r '.resources[].metadata.url'); do
+				name=$(cf_curl $app_url | jq -r '.entity.name')
+				debug " + found app ${name}"
+				n=$((n + 1))
 
-			#cf_curl $(cf_curl $app_url | jq -r '.entity.space_url')
-			org=$(cf_curl $(cf_curl $(cf_curl $app_url | jq -r '.entity.space_url') | jq -r '.entity.organization_url') | jq -r '.entity.name')
-			space=$(cf_curl $(cf_curl $app_url | jq -r '.entity.space_url') | jq -r '.entity.name')
-			echo "${org}|${space}|${name}"
-		done
-		if [[ $n == 0 ]]; then
-			org=$(cf_curl $(cf_curl $(cf_curl $url | jq -r '.entity.space_url') | jq -r '.entity.organization_url') | jq -r '.entity.name')
-			space=$(cf_curl $(cf_curl $url | jq -r '.entity.space_url') | jq -r '.entity.name')
-			echo "${org}|${space}|-"
+				#cf_curl $(cf_curl $app_url | jq -r '.entity.space_url')
+				org=$(cf_curl $(cf_curl $(cf_curl $app_url | jq -r '.entity.space_url') | jq -r '.entity.organization_url') | jq -r '.entity.name')
+				space=$(cf_curl $(cf_curl $app_url | jq -r '.entity.space_url') | jq -r '.entity.name')
+				echo "${org}|${space}|${name}"
+			done
+			if [[ $n == 0 ]]; then
+				org=$(cf_curl $(cf_curl $(cf_curl $url | jq -r '.entity.space_url') | jq -r '.entity.organization_url') | jq -r '.entity.name')
+				space=$(cf_curl $(cf_curl $url | jq -r '.entity.space_url') | jq -r '.entity.name')
+				echo "${org}|${space}|-"
+			fi
 		fi
-	fi
+	done
+	next=$(cf_curl $next | jq -r '.next_url')
 done
 ) | column -t -s '|'
