@@ -1,0 +1,231 @@
+#!/bin/bash
+
+###############################################################################
+## Use these scripts to scrape the cf cli to get an overview of the domains,
+## feature-flags, environment variable groups, network policies, isolation 
+## segments, marketplace, service brokers, CUPS, and application security 
+## groups.  The output will be in markdown format.
+##
+## When combined with 
+## https://www.starkandwayne.com/blog/foundation-discovery-queries/ you will 
+## have an overall idea of the customizations and sizing of an existing CF
+## deployment.
+##
+## To run:
+##  - Make sure you are logged in via the cf cli
+##  - Install jq
+##  - Route the output to a md file, ie:
+##       ./cf-inventory > my_cf.md
+###############################################################################
+
+
+echo "# Environment Details Report"
+echo ""
+echo "Environment Name: cf"
+echo ""
+
+
+echo "## API endpoint/info"
+echo ""
+echo '```'
+echo "cf curl /v2/info"
+echo '```'
+echo ""
+echo '```'
+cf curl /v2/info
+echo '```'
+echo ""
+
+
+echo "## Domains"
+echo ""
+echo '```'
+echo "cf domains"
+echo '```'
+echo ""
+echo '```'
+cf domains
+echo '```'
+echo ""
+
+
+echo "## Private Domain Names"
+echo ""
+echo '```'
+echo "cf curl /v2/private_domains/*"
+echo '```'
+echo ""
+echo '```'
+next_url="/v2/private_domains?results-per-page=1"
+while [[ "${next_url}" != "null" ]]; do
+  names=$(cf curl ${next_url} | jq -r ".resources[].entity.name")
+  for name in $names; do
+    echo "${name}"
+  done
+  next_url=$(cf curl ${next_url} | jq -r -c ".next_url")
+done
+
+echo '```'
+echo ""
+
+echo "## Feature-flags"
+echo ""
+echo '```'
+echo "cf feature-flags"
+echo '```'
+echo ""
+echo '```'
+cf feature-flags
+echo '```'
+echo ""
+
+echo "## Environment Variable Groups"
+echo ""
+echo '```'
+echo "cf running-environment-variable-group"
+echo '```'
+echo ""
+echo '```'
+cf running-environment-variable-group
+echo '```'
+echo ""
+
+echo ""
+echo '```'
+echo "cf staging-environment-variable-group"
+echo '```'
+echo ""
+echo '```'
+cf staging-environment-variable-group
+echo '```'
+echo ""
+
+echo "## Stacks"
+echo ""
+echo '```'
+echo "cf stacks"
+echo '```'
+echo ""
+echo '```'
+cf stacks
+echo '```'
+echo ""
+
+echo "## Buildpacks"
+echo ""
+echo '```'
+echo "cf buildpacks"
+echo '```'
+echo ""
+echo '```'
+cf buildpacks
+echo '```'
+echo ""
+
+echo "## Network Policies"
+echo ""
+echo '```'
+echo "cf network-policies"
+echo '```'
+echo ""
+echo '```'
+cf network-policies
+echo '```'
+echo ""
+
+echo "## Isolation Segments"
+echo ""
+echo '```'
+echo "cf isolation-segments"
+echo '```'
+echo ""
+echo '```'
+cf isolation-segments
+echo '```'
+echo ""
+
+echo "## Quotas"
+echo ""
+echo '```'
+echo "cf quotas"
+echo '```'
+echo ""
+echo '```'
+cf quotas
+echo '```'
+echo ""
+
+echo "## Marketplace"
+echo ""
+echo '```'
+echo "cf m"
+echo '```'
+echo ""
+echo '```'
+cf m
+echo '```'
+echo ""
+
+echo "## Service Brokers"
+echo ""
+echo '```'
+echo "cf service-brokers"
+echo '```'
+echo ""
+echo '```'
+cf service-brokers
+echo '```'
+echo ""
+
+echo "## Application Security Groups"
+echo ""
+echo '```'
+echo "cf security-groups"
+echo '```'
+echo ""
+echo '```'
+cf security-groups
+echo '```'
+echo ""
+
+
+
+echo "## User Provided Service Instance Names"
+echo ""
+echo '```'
+echo "cf curl /v2/user_provided_service_instances/*"
+echo '```'
+echo ""
+echo '```'
+next_url="/v2/user_provided_service_instances?results-per-page=10"
+while [[ "${next_url}" != "null" ]]; do
+  names=$(cf curl ${next_url} | jq -r ".resources[].entity.name")
+  for name in $names; do
+    echo "${name}"
+  done
+  next_url=$(cf curl ${next_url} | jq -r -c ".next_url")
+done
+echo '```'
+echo ""
+
+echo "## Security group details"
+echo ""
+echo '```'
+echo "cf curl /v2/security_groups/*"
+echo '```'
+echo ""
+echo '```'
+next_url="/v2/security_groups?results-per-page=1"
+while [[ "${next_url}" != "null" ]]; do
+  names=$(cf curl ${next_url} | jq -r ".resources[].entity.name")
+  for name in $names; do
+    cf security-group "${name}"
+  done
+  next_url=$(cf curl ${next_url} | jq -r -c ".next_url")
+done
+
+echo '```'
+echo ""
+
+echo "fin."
+exit
