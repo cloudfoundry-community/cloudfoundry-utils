@@ -1,0 +1,70 @@
+#!/usr/bin/env ruby
+# vim:ft=ruby:et:ts=2:sts=2:sw=2
+
+require 'fog'
+require 'getoptlong'
+
+opts = GetoptLong.new(
+  [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+  [ '--from', '-f', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--to',   '-t', GetoptLong::REQUIRED_ARGUMENT ]
+)
+
+
+src = {}
+dst = {}
+
+opts.each do |opt, arg|
+  case opt
+    when '--help'
+      puts <<-EOF
+sync-blobstore --from here.yml --to there.yml
+
+-h, --help       Print this help screen.
+
+-f, --from FILE  A YAML file definint the blobstore connection
+                 parameters for the source blobstore.
+                 Blobs will be copied from here.
+
+-t, --to FILE    A YAML file defining the blobstore connection
+                 parameters for the destination blobstore.
+                 Blobs will be copied to here.
+
+      EOF
+
+    when '--from'
+      src[:config] = YAML.load_file(arg)
+      src[:bucket] = delete src[:config]['bucket']
+      src[:fog]    = Fog::Storage::new(src[:config])
+
+    when '--to'
+      dst[:config] = YAML.load_file(arg)
+      dst[:bucket] = delete dst[:config]['bucket']
+      dst[:fog]    = Fog::Storage::new(dst[:config])
+
+  end
+end
+
+#asv = Fog::Storage.new({
+#  :provider => 'AWS',
+#  :aws_access_key_id =>  'cfservices',
+#  :aws_secret_access_key => 'secretkey',
+#  :host => 'storecf.gecis.io',
+#  :path_style => true,
+#  :aws_signature_version => 2,
+#  :port => 80,
+#  :scheme => 'http',
+#  :region => 'storecf.gecis.io'
+#})
+
+#s3 = Fog::Storage.new({
+#  :provider                 => 'AWS',
+#  :aws_access_key_id        => 'stuff',
+#  :aws_secret_access_key    => 'otherstuff'
+#})
+
+src[:fog].get_bucket(src[:bucket])[:body]["Contents"].each do |o|
+  puts "syncing #{o['key']}..."
+  #file = src[:fog].get_object(src[:bucket], o['key'])
+  #dst[:fog].put_object(dst[:bucket], key, file.body)
+end
